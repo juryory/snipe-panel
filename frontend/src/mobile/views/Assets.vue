@@ -75,6 +75,12 @@
       </van-list>
     </van-pull-refresh>
 
+    <!-- 主动作放悬浮按钮,导航栏那个小字在手机上没人看得到 -->
+    <button v-if="admin" class="fab" @click="$router.push({ name: 'asset-new' })">
+      <van-icon name="plus" size="22" />
+      <span class="fab__text">新增设备</span>
+    </button>
+
     <van-popup v-model:show="filterShow" position="bottom" round safe-area-inset-bottom>
       <div class="filter">
         <div class="filter__title">筛选</div>
@@ -115,6 +121,7 @@ import {
   CellGroup as VanCellGroup,
   Empty as VanEmpty,
   Field as VanField,
+  Icon as VanIcon,
   List as VanList,
   NavBar as VanNavBar,
   Picker as VanPicker,
@@ -336,6 +343,26 @@ onMounted(async () => {
 
 <style scoped>
 .chips { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 16px 8px; }
+.fab {
+  position: fixed;
+  right: 16px;
+  /* 抬到底部标签栏之上,再加 iOS 安全区 */
+  bottom: calc(70px + env(safe-area-inset-bottom));
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 48px;
+  padding: 0 18px;
+  border: none;
+  border-radius: 24px;
+  background: #1f2937;
+  color: #fff;
+  font-size: 15px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
+}
+.fab:active { opacity: 0.85; }
+.fab__text { line-height: 1; }
 .card {
   background: #fff;
   margin: 8px 12px;
