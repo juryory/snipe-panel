@@ -59,7 +59,7 @@ async function submit() {
   try {
     session.user = await api.changePassword(form.oldPassword, form.newPassword)
     ElMessage.success('密码已修改')
-    router.replace('/m')
+    router.replace('/admin/assets')
   } catch (err) {
     toast(err)
   } finally {

@@ -3,8 +3,6 @@
  * 鉴权走 httpOnly Cookie(PRD 3.7),前端拿不到也不需要 token,
  * 因此所有请求带 credentials: 'same-origin' 即可。
  */
-import { ElMessage } from 'element-plus'
-
 let onUnauthorized = () => {}
 export function setUnauthorizedHandler(fn) {
   onUnauthorized = fn
@@ -66,9 +64,24 @@ async function request(path, { method = 'GET', body, params, raw = false } = {})
   return res.json()
 }
 
-/** 统一的错误提示,页面里 catch 后调用即可。 */
+/**
+ * 统一的错误提示。
+ *
+ * 具体怎么弹由各入口注入 —— 这一层不能 import 任何 UI 库:后台用 Element Plus、
+ * 手机端用 Vant,一旦在这里写死一个,另一半就会被迫打包进整套用不上的组件库。
+ */
+let errorNotifier = (message) => {
+  // 没注册就退化成控制台,至少不吞掉错误
+  console.error(message)
+}
+
+export function setErrorNotifier(fn) {
+  errorNotifier = fn
+}
+
+/** 页面里 catch 后调用即可。 */
 export function toast(err) {
-  ElMessage.error(err instanceof ApiError ? err.detail : String(err))
+  errorNotifier(err instanceof ApiError ? err.detail : String(err))
 }
 
 export const api = {

@@ -144,6 +144,24 @@ docker compose cp app:/data/backup.db ./backup-$(date +%F).db
 
 配套约束:**资产编号最长 10 个字符**,所以分类前缀限长 5 位(`CategoryCreate.tag_prefix`)。多一个字符就跳到 version 2(25×25),模块从 0.31mm 缩到 0.27mm,12mm 标签会明显更难扫。
 
+### 前端是两个独立入口
+
+| 入口 | 文件 | 路由 | UI 库 | 首屏 |
+|---|---|---|---|---|
+| 桌面后台 | `index.html` → `src/main.js` | `/admin/*`、`/login` | Element Plus | ~1.4 MB |
+| 手机端 | `m.html` → `src/mobile/main.js` | `/m/*` | Vant | ~340 KB |
+
+后端 `spa_fallback` 按路径分发:`/m` 与 `/m/*` 给 `m.html`,其余给 `index.html`。
+两个入口各自打包,手机用户不会白下载一整套桌面组件;将来手机端要套 App 壳或
+重写成小程序,只动这一半。
+
+**共享的东西只能是 UI 无关的**:`api.js`、`format.js`、`store.js`、`QrScanner.vue`。
+`api.js` 里的 `toast()` 因此不能直接 `import { ElMessage }` —— 那会把整个
+Element Plus 拖进手机端的包(实测多下载 1 MB)。改成各入口用
+`setErrorNotifier()` 注入,和 `setUnauthorizedHandler()` 一个套路。
+
+两个入口之间跳转必须整页跳(`window.location`),前端路由跳不过去。
+
 ### 后台在手机上走卡片,不是硬压表格
 
 管理员会拿手机开后台(移动端菜单里就有入口)。`el-table` 在窄屏下基本没法用 ——

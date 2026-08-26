@@ -4,7 +4,8 @@ import { api } from './api'
 import { session } from './store'
 
 const routes = [
-  { path: '/', redirect: '/m' },
+  // 手机端是另一个入口(m.html),不在这个路由表里;窄屏访问根路径直接整页跳过去
+  { path: '/', redirect: () => (isNarrowScreen() ? redirectToMobile() : '/admin/assets') },
   { path: '/login', name: 'login', component: () => import('./views/Login.vue'), meta: { public: true } },
   {
     path: '/change-password',
@@ -13,11 +14,6 @@ const routes = [
     meta: { allowBeforePasswordChange: true },
   },
 
-  // 移动端(PRD 3.4:首页即取景框)
-  { path: '/m', name: 'scan', component: () => import('./views/m/Scan.vue') },
-  { path: '/m/a/:tag', name: 'm-asset', component: () => import('./views/m/AssetDetail.vue') },
-  { path: '/m/mine', name: 'm-mine', component: () => import('./views/m/MyAssets.vue') },
-  { path: '/m/install', name: 'm-install', component: () => import('./views/m/Install.vue') },
 
   // 桌面后台
   { path: '/admin', redirect: '/admin/assets' },
@@ -28,8 +24,17 @@ const routes = [
   { path: '/admin/checkouts', name: 'admin-checkouts', component: () => import('./views/admin/Checkouts.vue') },
   { path: '/admin/inventory', name: 'admin-inventory', component: () => import('./views/admin/Inventory.vue') },
 
-  { path: '/:pathMatch(.*)*', redirect: '/m' },
+  { path: '/:pathMatch(.*)*', redirect: '/admin/assets' },
 ]
+
+function isNarrowScreen() {
+  return window.matchMedia('(max-width: 768px)').matches
+}
+
+function redirectToMobile() {
+  window.location.replace('/m/')
+  return '/admin/assets' // 占位,整页跳转会立刻接管
+}
 
 export const router = createRouter({
   history: createWebHistory(),
@@ -53,6 +58,6 @@ router.beforeEach(async (to) => {
   if (session.user.must_change_password && !to.meta.allowBeforePasswordChange) {
     return { name: 'change-password' }
   }
-  if (to.meta.admin && session.user.role !== 'admin') return { name: 'scan' }
+  if (to.meta.admin && session.user.role !== 'admin') return { name: 'admin-assets' }
   return true
 })

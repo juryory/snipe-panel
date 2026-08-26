@@ -96,6 +96,11 @@ if _dist and (_dist / "index.html").exists():
         # 防目录穿越:请求路径必须落在 dist 目录内
         if full_path and candidate.is_file() and _dist.resolve() in candidate.parents:
             return FileResponse(candidate)
+        # 前端是两个独立入口:/m/* 归手机端(Vant),其余归桌面后台(Element Plus)。
+        # 两套 UI 库分开打包,手机用户不必白下载一整套桌面组件。
+        mobile = _dist / "m.html"
+        if (full_path == "m" or full_path.startswith("m/")) and mobile.exists():
+            return FileResponse(mobile)
         return FileResponse(_dist / "index.html")
 else:
     @app.get("/", include_in_schema=False)

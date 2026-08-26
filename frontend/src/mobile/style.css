@@ -1,0 +1,28 @@
+:root {
+  color-scheme: light;
+  /* Vant 变量:统一到系统的深色主色 */
+  --van-primary-color: #1f2937;
+  --van-nav-bar-background: #1f2937;
+  --van-nav-bar-title-text-color: #fff;
+  --van-nav-bar-icon-color: #fff;
+  --van-nav-bar-text-color: #fff;
+}
+* { box-sizing: border-box; }
+html, body, #app { height: 100%; margin: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  background: #f7f8fa;
+  color: #323233;
+}
+
+/* 底部标签栏会盖住内容,给页面留出高度 + iOS 安全区 */
+.page {
+  padding-bottom: calc(60px + env(safe-area-inset-bottom));
+}
+.page--plain { padding-bottom: env(safe-area-inset-bottom); }
+
+.tag-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.muted { color: #969799; }
+.pad { padding: 12px; }

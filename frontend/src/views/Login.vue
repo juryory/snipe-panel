@@ -53,7 +53,12 @@ async function submit() {
       router.replace({ name: 'change-password' })
       return
     }
-    router.replace(route.query.redirect || '/m')
+    // 后台入口的登录页:手机上登进来就送去手机端
+    if (window.matchMedia('(max-width: 768px)').matches && !route.query.redirect) {
+      window.location.replace('/m/')
+      return
+    }
+    router.replace(route.query.redirect || '/admin/assets')
   } catch (err) {
     toast(err)
   } finally {
