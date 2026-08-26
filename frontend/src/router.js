@@ -25,6 +25,7 @@ const routes = [
   { path: '/admin/companies', name: 'admin-companies', component: () => import('./views/admin/Companies.vue') },
   { path: '/admin/users', name: 'admin-users', component: () => import('./views/admin/Users.vue'), meta: { admin: true } },
   { path: '/admin/checkouts', name: 'admin-checkouts', component: () => import('./views/admin/Checkouts.vue') },
+  { path: '/admin/inventory', name: 'admin-inventory', component: () => import('./views/admin/Inventory.vue') },
 
   { path: '/:pathMatch(.*)*', redirect: '/m' },
 ]

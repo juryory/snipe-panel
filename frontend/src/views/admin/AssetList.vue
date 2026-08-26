@@ -25,6 +25,11 @@
           <el-option label="借出中" :value="true" />
           <el-option label="未借出" :value="false" />
         </el-select>
+        <el-select v-model="filters.unchecked_days" placeholder="盘库情况" clearable style="width: 150px" @change="reload(1)">
+          <el-option label="超 30 天未盘库" :value="30" />
+          <el-option label="超 90 天未盘库" :value="90" />
+          <el-option label="超 180 天未盘库" :value="180" />
+        </el-select>
         <el-button type="primary" @click="reload(1)">查询</el-button>
 
         <div class="filters__spacer"></div>
@@ -71,9 +76,19 @@
             <span v-if="!row.owner && !row.current_checkout">—</span>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="230" fixed="right">
+        <el-table-column label="最后盘库" width="150">
+          <template #default="{ row }">
+            <template v-if="row.last_check">
+              <div>{{ fmtTime(row.last_check.checked_at) }}</div>
+              <div class="muted small">{{ displayName(row.last_check.checked_by) }}</div>
+            </template>
+            <el-tag v-else type="info" size="small">从未盘库</el-tag>
+          </template>
+        </el-table-column>
+        <el-table-column label="操作" width="290" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" @click="showQr(row)">二维码</el-button>
+            <el-button link type="warning" @click="openCheck(row)">盘库</el-button>
             <el-button v-if="!row.is_checked_out" link type="primary" @click="openCheckout(row)">借出</el-button>
             <el-button v-else link type="success" @click="doCheckin(row)">归还</el-button>
             <el-button v-if="admin" link type="primary" @click="openForm(row)">编辑</el-button>
@@ -170,6 +185,8 @@
       </div>
     </el-dialog>
 
+    <CheckDialog v-model="checkVisible" :asset="checkAsset" @done="reload()" />
+
     <!-- 借出 -->
     <el-dialog v-model="checkoutVisible" title="借出设备" width="420px">
       <el-form v-if="checkoutAsset" label-width="96px">
@@ -198,8 +215,9 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
+import CheckDialog from '../../components/CheckDialog.vue'
 import { api, toast } from '../../api'
-import { displayStatus } from '../../format'
+import { displayStatus, fmtTime } from '../../format'
 import { displayName, isAdmin, session } from '../../store'
 
 const admin = isAdmin()
@@ -216,7 +234,9 @@ const loading = ref(false)
 const saving = ref(false)
 
 const companies = ref([])
-const filters = reactive({ q: '', category_id: null, company_id: null, status: null, checked_out: null })
+const filters = reactive({
+  q: '', category_id: null, company_id: null, status: null, checked_out: null, unchecked_days: null,
+})
 
 const emptyForm = () => ({
   id: null,
@@ -241,6 +261,9 @@ const qrVisible = ref(false)
 const qrAsset = ref(null)
 const qrSrc = computed(() => (qrAsset.value ? api.qrcodeUrl(qrAsset.value.id, 'png', 10) : ''))
 
+const checkVisible = ref(false)
+const checkAsset = ref(null)
+
 const checkoutVisible = ref(false)
 const checkoutAsset = ref(null)
 const checkoutForm = reactive({ user_id: null, due_at: null })
@@ -253,6 +276,7 @@ async function reload(toPage) {
       q: filters.q,
       category_id: filters.category_id,
       company_id: filters.company_id,
+      unchecked_days: filters.unchecked_days,
       status: filters.status,
       checked_out: filters.checked_out,
       page: page.value,
@@ -349,6 +373,11 @@ function downloadQr(format) {
   link.click()
 }
 
+function openCheck(row) {
+  checkAsset.value = row
+  checkVisible.value = true
+}
+
 function openCheckout(row) {
   checkoutAsset.value = row
   checkoutForm.user_id = session.user ? session.user.id : null
@@ -411,8 +440,11 @@ onMounted(async () => {
     toast(err)
   }
   // 从采购公司页点「N 台」跳过来时带着 company_id,直接按该公司筛选
-  const fromQuery = Number(route.query.company_id)
-  if (fromQuery) filters.company_id = fromQuery
+  const fromCompany = Number(route.query.company_id)
+  if (fromCompany) filters.company_id = fromCompany
+  // 从盘库概览点「去盘这些」跳过来,直接按超期未盘筛选
+  const fromUnchecked = Number(route.query.unchecked_days)
+  if (fromUnchecked) filters.unchecked_days = fromUnchecked
   await reload(1)
 })
 </script>

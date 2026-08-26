@@ -1,6 +1,6 @@
 """请求 / 响应模型。"""
 from datetime import date, datetime, timezone
-from typing import Annotated, Generic, List, Optional, TypeVar
+from typing import Annotated, Generic, List, Literal, Optional, TypeVar
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
 
@@ -136,6 +136,55 @@ class CompanyUpdate(BaseModel):
     note: Optional[str] = None
 
 
+# ---------- 盘库 ----------
+class InventoryCheckIn(BaseModel):
+    """提交盘库。
+
+    位置和状态留空 = 与台账一致(即「确认无误」)。连续扫码盘库时整个 body
+    可以是空的,一次调用完成一台。
+    """
+
+    observed_location: Optional[str] = Field(default=None, max_length=128)
+    observed_status: Optional[AssetStatus] = None
+    note: str = ""
+
+
+class InventoryCheckBrief(BaseModel):
+    """设备上的「最后一次盘库」摘要。"""
+
+    id: int
+    checked_at: UtcDatetime
+    checked_by: UserBrief
+    has_discrepancy: bool
+
+
+class InventoryCheckOut(BaseModel):
+    id: int
+    asset_id: int
+    asset_tag: str
+    asset_name: str
+    checked_by: UserBrief
+    checked_at: UtcDatetime
+    observed_location: str
+    observed_status: AssetStatus
+    observed_status_label: str
+    location_at_check: str
+    status_at_check: AssetStatus
+    status_at_check_label: str
+    borrower: Optional[UserBrief]
+    note: str
+    has_discrepancy: bool
+    applied: bool
+    pending: bool  # 有差异且尚未处理
+    resolved_at: Optional[UtcDatetime]
+    resolved_by: Optional[UserBrief]
+
+
+class ResolveCheckIn(BaseModel):
+    # apply = 采纳盘库看到的值写回台账;dismiss = 维持台账,仅留档
+    action: Literal["apply", "dismiss"]
+
+
 # ---------- 设备 ----------
 class AssetBase(BaseModel):
     name: str = Field(min_length=1, max_length=128)
@@ -206,6 +255,8 @@ class AssetOut(BaseModel):
     # PRD 3.5:借出为派生状态
     is_checked_out: bool
     current_checkout: Optional[CheckoutBrief]
+    # 滚动盘点:最后一次盘库,同样派生自 inventory_checks,不存字段
+    last_check: Optional[InventoryCheckBrief]
     created_at: UtcDatetime
     updated_at: UtcDatetime
 

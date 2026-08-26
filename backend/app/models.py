@@ -169,6 +169,56 @@ Index(
 )
 
 
+class InventoryCheck(Base):
+    """盘库记录:某人在某时刻核对了某台设备。
+
+    PRD 阶段二「盘点」。采用滚动盘点 —— 不建盘点任务实体,而是让每台设备算出
+    「最后盘库时间」,台账按「超过 N 天未盘库」筛选,超期列表即待办清单。
+
+    记录的是**观察值**,永远可以提交成功;是否写回台账另说(见 applied)。
+    这样现场盘库的人不会因为权限或状态冲突而卡住。
+    """
+
+    __tablename__ = "inventory_checks"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    asset_id: Mapped[int] = mapped_column(ForeignKey("assets.id"), index=True)
+    checked_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    checked_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
+
+    # 盘库时实际看到的
+    observed_location: Mapped[str] = mapped_column(String(128), default="")
+    observed_status: Mapped[AssetStatus] = mapped_column(Enum(AssetStatus))
+
+    # 盘库当时台账里记的(快照)。存下来才能事后追「位置漂移」的历史,
+    # 光比对当前台账是不够的 —— 台账后来又被改过就对不上了。
+    location_at_check: Mapped[str] = mapped_column(String(128), default="")
+    status_at_check: Mapped[AssetStatus] = mapped_column(Enum(AssetStatus))
+
+    # 盘库当时借给谁(可空)。在同事桌上盘到设备是正常情况,不算异常
+    borrower_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+
+    note: Mapped[str] = mapped_column(Text, default="")
+
+    # 差异是否已写回台账。管理员盘库时当场写回;普通用户盘出的差异挂起待处理
+    applied: Mapped[bool] = mapped_column(Boolean, default=False)
+    resolved_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    resolved_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+
+    asset: Mapped[Asset] = relationship()
+    checked_by: Mapped[User] = relationship(foreign_keys=[checked_by_id])
+    borrower: Mapped[Optional[User]] = relationship(foreign_keys=[borrower_id])
+    resolved_by: Mapped[Optional[User]] = relationship(foreign_keys=[resolved_by_id])
+
+    @property
+    def has_discrepancy(self) -> bool:
+        """是否与台账不符。派生,不存字段 —— 与「借出」的处理方式一致。"""
+        return (
+            self.observed_location != self.location_at_check
+            or self.observed_status != self.status_at_check
+        )
+
+
 class ActivityLog(Base):
     __tablename__ = "activity_logs"
 

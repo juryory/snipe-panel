@@ -111,5 +111,14 @@ export const api = {
     request(`/api/users/${id}/reset-password`, { method: 'POST', body: { new_password } }),
 
   listCheckouts: (params) => request('/api/checkouts', { params }),
+
+  // 盘库(滚动盘点)
+  checkAsset: (id, body) => request(`/api/assets/${id}/check`, { method: 'POST', body }),
+  assetChecks: (id) => request(`/api/assets/${id}/checks`),
+  listChecks: (params) => request('/api/inventory/checks', { params }),
+  inventorySummary: (unchecked_days) =>
+    request('/api/inventory/summary', { params: { unchecked_days } }),
+  resolveCheck: (id, action) =>
+    request(`/api/inventory/checks/${id}/resolve`, { method: 'POST', body: { action } }),
   myAssets: () => request('/api/me/assets'),
 }

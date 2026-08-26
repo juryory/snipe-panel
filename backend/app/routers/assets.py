@@ -2,6 +2,7 @@
 import csv
 import io
 import zipfile
+from datetime import timedelta
 from typing import List, Optional
 
 import segno
@@ -20,6 +21,7 @@ from ..models import (
     Category,
     CheckoutRecord,
     Company,
+    InventoryCheck,
     Role,
     User,
     to_naive_utc,
@@ -32,16 +34,21 @@ from ..schemas import (
     CheckinIn,
     CheckoutIn,
     CheckoutRecordOut,
+    InventoryCheckIn,
+    InventoryCheckOut,
     Page,
 )
 from ..services import (
     asset_out,
     assets_out,
+    check_out,
     checkin,
     checkout,
     create_asset_with_tag,
+    last_checks_for,
     log,
     open_checkouts_for,
+    record_inventory_check,
     record_out,
 )
 
@@ -65,6 +72,15 @@ def _get_asset(db: Session, asset_id: int) -> Asset:
     if asset is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="设备不存在")
     return asset
+
+
+def _one(db: Session, asset: Asset) -> AssetOut:
+    """单台设备的完整输出:借出状态和最后盘库都是派生的,统一在这里补齐。"""
+    return asset_out(
+        asset,
+        open_checkouts_for(db, [asset.id]).get(asset.id),
+        last_checks_for(db, [asset.id]).get(asset.id),
+    )
 
 
 def _open_checkout_subquery():
@@ -101,6 +117,9 @@ def list_assets(
     status_: Optional[AssetStatus] = Query(None, alias="status"),
     location: Optional[str] = None,
     checked_out: Optional[bool] = Query(None, description="是否借出中"),
+    unchecked_days: Optional[int] = Query(
+        None, ge=0, description="只看超过 N 天未盘库的(含从未盘库)"
+    ),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=200),
     db: Session = Depends(get_db),
@@ -130,6 +149,11 @@ def list_assets(
         stmt = stmt.where(Asset.id.in_(_open_checkout_subquery()))
     elif checked_out is False:
         stmt = stmt.where(Asset.id.not_in(_open_checkout_subquery()))
+    if unchecked_days is not None:
+        # 滚动盘点的待办清单:N 天内盘过的排除掉,剩下的(含从未盘过的)就是要盘的
+        cutoff = utcnow() - timedelta(days=unchecked_days)
+        recent = select(InventoryCheck.asset_id).where(InventoryCheck.checked_at >= cutoff)
+        stmt = stmt.where(Asset.id.not_in(recent))
 
     total = db.execute(
         select(func.count()).select_from(stmt.order_by(None).subquery())
@@ -165,7 +189,7 @@ def create_asset(
     asset = create_asset_with_tag(db, category, tag, **fields)
     log(db, admin.id, "asset_create", "asset", asset.id, asset.asset_tag)
     db.commit()
-    return asset_out(_get_asset(db, asset.id), None)
+    return _one(db, _get_asset(db, asset.id))
 
 
 # ★ PRD 3.2:扫码查询。必须鉴权 + 限流,防止按编号规律枚举全量台账。
@@ -187,7 +211,7 @@ def get_by_tag(tag: str, db: Session = Depends(get_db), user: User = Depends(act
     if asset is None:
         # PRD 3.2:统一 404,不返回可确认编号空间的提示
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="未找到该设备")
-    return asset_out(asset, open_checkouts_for(db, [asset.id]).get(asset.id))
+    return _one(db, asset)
 
 
 @router.post("/qrcodes/export")
@@ -241,8 +265,7 @@ def export_qrcodes(
 
 @router.get("/{asset_id}", response_model=AssetOut)
 def get_asset(asset_id: int, db: Session = Depends(get_db), _: User = Depends(active_user)):
-    asset = _get_asset(db, asset_id)
-    return asset_out(asset, open_checkouts_for(db, [asset.id]).get(asset.id))
+    return _one(db, _get_asset(db, asset_id))
 
 
 @router.put("/{asset_id}", response_model=AssetOut)
@@ -279,8 +302,7 @@ def update_asset(
     # 改了 category_id / company_id 后若不显式过期,下面的 joinedload 会命中
     # identity map 里的旧对象,返回改动前的分类名和采购公司。
     db.expire(asset)
-    refreshed = _get_asset(db, asset_id)
-    return asset_out(refreshed, open_checkouts_for(db, [asset_id]).get(asset_id))
+    return _one(db, _get_asset(db, asset_id))
 
 
 @router.delete("/{asset_id}")
@@ -350,6 +372,43 @@ def checkin_asset(
     record = checkin(db, asset, user, note=payload.note)
     db.commit()
     return record_out(record)
+
+
+@router.post("/{asset_id}/check", response_model=InventoryCheckOut)
+def check_asset(
+    asset_id: int,
+    payload: InventoryCheckIn,
+    db: Session = Depends(get_db),
+    user: User = Depends(active_user),
+):
+    """盘库。位置 / 状态留空表示与台账一致(确认无误)。
+
+    任何登录用户都能提交;管理员盘出的差异当场写回台账,普通用户盘出的差异
+    挂起进「待处理差异」列表等管理员确认。
+    """
+    asset = _get_asset(db, asset_id)
+    check = record_inventory_check(
+        db, asset, user, payload.observed_location, payload.observed_status, payload.note
+    )
+    db.commit()
+    return check_out(check)
+
+
+@router.get("/{asset_id}/checks", response_model=List[InventoryCheckOut])
+def asset_checks(asset_id: int, db: Session = Depends(get_db), _: User = Depends(active_user)):
+    """该设备的盘库历史。"""
+    asset = _get_asset(db, asset_id)
+    rows = (
+        db.execute(
+            select(InventoryCheck)
+            .where(InventoryCheck.asset_id == asset.id)
+            .order_by(InventoryCheck.checked_at.desc())
+            .limit(50)
+        )
+        .scalars()
+        .all()
+    )
+    return [check_out(r) for r in rows]
 
 
 @router.get("/{asset_id}/history", response_model=List[CheckoutRecordOut])

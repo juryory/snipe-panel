@@ -2,9 +2,9 @@
 from typing import Dict, Iterable, List, Optional, Sequence
 
 from fastapi import HTTPException, status
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from .config import settings
 from .models import (
@@ -14,10 +14,20 @@ from .models import (
     AssetStatus,
     Category,
     CheckoutRecord,
+    InventoryCheck,
+    Role,
     User,
     utcnow,
 )
-from .schemas import AssetOut, CheckoutBrief, CheckoutRecordOut, CompanyBrief, UserBrief
+from .schemas import (
+    AssetOut,
+    CheckoutBrief,
+    CheckoutRecordOut,
+    CompanyBrief,
+    InventoryCheckBrief,
+    InventoryCheckOut,
+    UserBrief,
+)
 
 
 # ---------- 操作日志 ----------
@@ -86,6 +96,108 @@ def open_checkouts_for(db: Session, asset_ids: Sequence[int]) -> Dict[int, Check
     return {r.asset_id: r for r in rows}
 
 
+def last_checks_for(db: Session, asset_ids: Sequence[int]) -> Dict[int, InventoryCheck]:
+    """批量取每台设备最后一次盘库,避免列表页 N+1。
+
+    滚动盘点:「最后盘库时间」派生自 inventory_checks,不在 assets 上冗余字段 ——
+    与「借出」的处理方式一致,避免两处数据打架。
+    """
+    if not asset_ids:
+        return {}
+    newest = (
+        select(InventoryCheck.asset_id, func.max(InventoryCheck.checked_at).label("t"))
+        .where(InventoryCheck.asset_id.in_(asset_ids))
+        .group_by(InventoryCheck.asset_id)
+        .subquery()
+    )
+    rows = db.execute(
+        select(InventoryCheck)
+        .join(
+            newest,
+            (InventoryCheck.asset_id == newest.c.asset_id)
+            & (InventoryCheck.checked_at == newest.c.t),
+        )
+        .options(joinedload(InventoryCheck.checked_by))
+    ).unique().scalars().all()
+    return {r.asset_id: r for r in rows}
+
+
+def record_inventory_check(
+    db: Session,
+    asset: Asset,
+    actor: User,
+    observed_location: Optional[str],
+    observed_status: Optional[AssetStatus],
+    note: str,
+) -> InventoryCheck:
+    """提交一次盘库。
+
+    记录的是观察值,**永远能提交成功** —— 现场盘库的人不该因为权限或状态冲突
+    而卡在半路。是否写回台账分两种情况:
+
+    - 管理员盘出的差异当场写回
+    - 普通用户盘出的差异挂起,进「待处理差异」列表由管理员确认
+
+    另有一条既有规则要守住:借出中的设备不允许改状态(PRD 3.5),所以借出时
+    即便是管理员,状态差异也只记录不写回,等归还后再处理。
+    """
+    open_record = open_checkouts_for(db, [asset.id]).get(asset.id)
+
+    check = InventoryCheck(
+        asset_id=asset.id,
+        checked_by_id=actor.id,
+        observed_location=observed_location if observed_location is not None else asset.location,
+        observed_status=observed_status if observed_status is not None else asset.status,
+        location_at_check=asset.location,
+        status_at_check=asset.status,
+        borrower_id=open_record.user_id if open_record else None,
+        note=note,
+    )
+
+    if check.has_discrepancy and actor.role == Role.ADMIN:
+        applied_any = False
+        if check.observed_location != asset.location:
+            asset.location = check.observed_location
+            applied_any = True
+        if check.observed_status != asset.status and open_record is None:
+            asset.status = check.observed_status
+            applied_any = True
+        # 位置改了但状态因借出没改成 —— 仍算未处理完,留给管理员归还后再看
+        still_pending = check.observed_status != asset.status
+        if applied_any and not still_pending:
+            check.applied = True
+            check.resolved_at = utcnow()
+            check.resolved_by_id = actor.id
+
+    db.add(check)
+    db.flush()
+    detail = f"{asset.asset_tag} 盘库" + ("(有差异)" if check.has_discrepancy else "")
+    log(db, actor.id, "inventory_check", "asset", asset.id, detail)
+    return check
+
+
+def resolve_inventory_check(
+    db: Session, check: InventoryCheck, admin: User, action: str
+) -> InventoryCheck:
+    """管理员处理一条挂起的差异:采纳盘库值,或维持台账。"""
+    if action == "apply":
+        asset = check.asset
+        if check.observed_status != asset.status:
+            if open_checkouts_for(db, [asset.id]).get(asset.id) is not None:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="设备借出中,请先办理归还再采纳状态变更",
+                )
+            asset.status = check.observed_status
+        asset.location = check.observed_location
+        check.applied = True
+    check.resolved_at = utcnow()
+    check.resolved_by_id = admin.id
+    db.flush()
+    log(db, admin.id, f"inventory_{action}", "asset", check.asset_id, check.asset.asset_tag)
+    return check
+
+
 def is_overdue(record: CheckoutRecord) -> bool:
     return (
         record.checked_in_at is None
@@ -150,7 +262,11 @@ def _brief(user: Optional[User]) -> Optional[UserBrief]:
     return UserBrief.model_validate(user) if user else None
 
 
-def asset_out(asset: Asset, open_record: Optional[CheckoutRecord]) -> AssetOut:
+def asset_out(
+    asset: Asset,
+    open_record: Optional[CheckoutRecord],
+    last_check: Optional[InventoryCheck] = None,
+) -> AssetOut:
     current = None
     if open_record is not None:
         current = CheckoutBrief(
@@ -179,6 +295,7 @@ def asset_out(asset: Asset, open_record: Optional[CheckoutRecord]) -> AssetOut:
         photo_url=asset.photo_url,
         is_checked_out=open_record is not None,
         current_checkout=current,
+        last_check=check_brief(last_check),
         created_at=asset.created_at,
         updated_at=asset.updated_at,
     )
@@ -186,8 +303,45 @@ def asset_out(asset: Asset, open_record: Optional[CheckoutRecord]) -> AssetOut:
 
 def assets_out(db: Session, assets: Iterable[Asset]) -> List[AssetOut]:
     assets = list(assets)
-    open_map = open_checkouts_for(db, [a.id for a in assets])
-    return [asset_out(a, open_map.get(a.id)) for a in assets]
+    ids = [a.id for a in assets]
+    open_map = open_checkouts_for(db, ids)
+    check_map = last_checks_for(db, ids)
+    return [asset_out(a, open_map.get(a.id), check_map.get(a.id)) for a in assets]
+
+
+def check_brief(check: Optional[InventoryCheck]) -> Optional[InventoryCheckBrief]:
+    if check is None:
+        return None
+    return InventoryCheckBrief(
+        id=check.id,
+        checked_at=check.checked_at,
+        checked_by=_brief(check.checked_by),
+        has_discrepancy=check.has_discrepancy,
+    )
+
+
+def check_out(check: InventoryCheck) -> InventoryCheckOut:
+    return InventoryCheckOut(
+        id=check.id,
+        asset_id=check.asset_id,
+        asset_tag=check.asset.asset_tag,
+        asset_name=check.asset.name,
+        checked_by=_brief(check.checked_by),
+        checked_at=check.checked_at,
+        observed_location=check.observed_location,
+        observed_status=check.observed_status,
+        observed_status_label=STATUS_LABELS[check.observed_status],
+        location_at_check=check.location_at_check,
+        status_at_check=check.status_at_check,
+        status_at_check_label=STATUS_LABELS[check.status_at_check],
+        borrower=_brief(check.borrower),
+        note=check.note,
+        has_discrepancy=check.has_discrepancy,
+        applied=check.applied,
+        pending=check.has_discrepancy and check.resolved_at is None,
+        resolved_at=check.resolved_at,
+        resolved_by=_brief(check.resolved_by),
+    )
 
 
 def record_out(record: CheckoutRecord) -> CheckoutRecordOut:

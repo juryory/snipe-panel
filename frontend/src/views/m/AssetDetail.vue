@@ -83,6 +83,35 @@
       </el-card>
 
       <el-card shadow="never">
+        <div class="row-between">
+          <div>
+            <div><strong>盘库</strong></div>
+            <div v-if="asset.last_check" class="muted small">
+              上次 {{ fmtTime(asset.last_check.checked_at) }} ·
+              {{ displayName(asset.last_check.checked_by) }}
+            </div>
+            <div v-else class="muted small">从未盘库</div>
+          </div>
+          <el-button type="warning" @click="checkVisible = true">盘库</el-button>
+        </div>
+        <div v-if="checks.length" class="checks">
+          <div v-for="c in checks.slice(0, 5)" :key="c.id" class="record">
+            <div class="row-between">
+              <span>{{ displayName(c.checked_by) }}</span>
+              <el-tag v-if="c.pending" size="small" type="danger">差异待处理</el-tag>
+              <el-tag v-else-if="c.has_discrepancy" size="small" type="warning">已修正</el-tag>
+              <el-tag v-else size="small" type="success">无误</el-tag>
+            </div>
+            <div class="muted small">
+              {{ fmtTime(c.checked_at) }}
+              <template v-if="c.observed_location"> · {{ c.observed_location }}</template>
+            </div>
+            <div v-if="c.note" class="muted small">{{ c.note }}</div>
+          </div>
+        </div>
+      </el-card>
+
+      <el-card shadow="never">
         <div class="m-title" style="margin-top: 0">流转历史</div>
         <el-empty v-if="!history.length" description="暂无借还记录" :image-size="60" />
         <div v-for="record in history" :key="record.id" class="record">
@@ -100,6 +129,8 @@
         </div>
       </el-card>
     </template>
+
+    <CheckDialog v-model="checkVisible" :asset="asset" narrow @done="load" />
   </div>
 </template>
 
@@ -108,6 +139,7 @@ import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { ElMessage } from 'element-plus'
 
+import CheckDialog from '../../components/CheckDialog.vue'
 import { api, toast } from '../../api'
 import { displayStatus, fmtTime } from '../../format'
 import { displayName } from '../../store'
@@ -116,6 +148,8 @@ const route = useRoute()
 
 const asset = ref(null)
 const history = ref([])
+const checks = ref([])
+const checkVisible = ref(false)
 const loading = ref(true)
 const acting = ref(false)
 const error = ref('')
@@ -141,7 +175,10 @@ async function load() {
   error.value = ''
   try {
     asset.value = await api.getAssetByTag(route.params.tag)
-    history.value = await api.assetHistory(asset.value.id)
+    ;[history.value, checks.value] = await Promise.all([
+      api.assetHistory(asset.value.id),
+      api.assetChecks(asset.value.id),
+    ])
   } catch (err) {
     asset.value = null
     error.value = err.detail || '加载失败'
@@ -192,5 +229,7 @@ watch(() => route.params.tag, load, { immediate: true })
 .borrowed { margin-bottom: 12px; }
 .hint { font-size: 12px; margin-top: 8px; text-align: center; }
 .record { padding: 10px 0; border-bottom: 1px solid #f0f0f0; }
+.checks { margin-top: 8px; }
+.small { font-size: 12px; }
 .record:last-child { border-bottom: none; }
 </style>
