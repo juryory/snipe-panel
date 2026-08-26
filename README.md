@@ -78,13 +78,35 @@ cd backend
 
 ## 部署
 
+先准备环境变量:
+
 ```bash
 cp .env.example .env
-# 填 SITE_ADDRESS、SNIPE_SECRET_KEY(openssl rand -base64 48)、初始管理员密码
+# 至少要填 SNIPE_SECRET_KEY(openssl rand -base64 48)和 SNIPE_INITIAL_ADMIN_PASSWORD
+```
+
+### 情况一:服务器上已有 Nginx / 宝塔面板(推荐)
+
+```bash
 docker compose up -d --build
 ```
 
-Caddy 会为 `SITE_ADDRESS` 自动申请并续期证书。域名需先解析到这台服务器,且 80/443 端口可从公网访问。
+只起应用容器,监听 `127.0.0.1:8000`,不碰 80/443。再用宿主机上的 Nginx(或宝塔的反向代理)转发过去、签证书。详见 [docs/宝塔部署.md](docs/宝塔部署.md)。
+
+### 情况二:独立服务器,80/443 空着
+
+叠加 Caddy,自动申请并续期证书:
+
+```bash
+# .env 里补上 SITE_ADDRESS=assets.example.com
+docker compose -f docker-compose.yml -f docker-compose.caddy.yml up -d --build
+```
+
+域名需先解析到这台服务器,且 80/443 可从公网访问。
+
+### 反代必须转发的头
+
+容器跑在反代后面。**`X-Forwarded-For` 一定要转发**——否则 `request.client.host` 拿到的是反代自己的地址,登录失败的 IP 限流会把全公司算成同一个来源。容器启动命令里已经带了 `--proxy-headers --forwarded-allow-ips=*`,反代那边配好即可。
 
 **备份**:数据都在 `snipe-data` 这个 volume 里(SQLite 单文件)。
 

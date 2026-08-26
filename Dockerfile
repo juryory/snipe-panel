@@ -22,4 +22,8 @@ COPY --from=frontend /build/dist ./frontend/dist
 
 VOLUME ["/data"]
 EXPOSE 8000
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+# --proxy-headers + --forwarded-allow-ips:容器永远跑在反代后面(宝塔 Nginx 或
+# 自带的 Caddy),不信任 X-Forwarded-For 的话 request.client.host 拿到的是反代的
+# 地址,登录失败的 IP 限流会把全公司算成同一个来源。容器只监听内网/回环,
+# 这里放开是安全的。
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000",      "--proxy-headers", "--forwarded-allow-ips", "*"]

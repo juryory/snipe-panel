@@ -1,0 +1,25 @@
+# 叠加层:独立服务器(没有宝塔 / 没有其他 Nginx 占着 80、443)时用,
+# 由 Caddy 自动申请并续期证书。
+#   docker compose -f docker-compose.yml -f docker-compose.caddy.yml up -d
+# app 的 127.0.0.1:8000 绑定保留着也无妨:只监听回环,公网进不来,
+# Caddy 走 compose 内网直连容器,不经过它。
+services:
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      # 例:assets.example.com。摄像头调用必须在 HTTPS 下才能工作(PRD 3.4)
+      SITE_ADDRESS: ${SITE_ADDRESS:?请在 .env 中设置对外域名}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - app
+
+volumes:
+  caddy-data:
+  caddy-config:
