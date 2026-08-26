@@ -36,6 +36,12 @@ def _first_category(client):
     return next(c for c in r.json() if c["tag_prefix"] == "PC")
 
 
+def _make_asset_in(admin, category_id, name):
+    r = admin.post("/api/assets", json={"name": name, "category_id": category_id})
+    assert r.status_code == 201, r.text
+    return r.json()
+
+
 def _make_asset(admin, name="ThinkPad X1", tag=None):
     cat = _first_category(admin)
     body = {"name": name, "category_id": cat["id"]}
@@ -129,15 +135,39 @@ def test_qrcode_contains_only_the_tag_never_a_url(admin):
     assert r.status_code == 200
     assert r.headers["content-type"] == "image/png"
 
-    expected = segno.make(asset["asset_tag"], error="m", micro=False)
-    as_url = segno.make(f"https://example.com/a/{asset['asset_tag']}", error="m", micro=False)
+    expected = segno.make(asset["asset_tag"], error="h", micro=False)
+    as_url = segno.make(f"https://example.com/a/{asset['asset_tag']}", error="h", micro=False)
     # 同参数下矩阵一致即内容一致;与 URL 版本必须不同
-    assert expected.matrix == segno.make(asset["asset_tag"], error="m", micro=False).matrix
+    assert expected.matrix == segno.make(asset["asset_tag"], error="h", micro=False).matrix
     assert expected.matrix != as_url.matrix
     # 必须是标准 QR version 1(21x21):Micro QR 虽然更小,但 ZXing 和浏览器
     # BarcodeDetector 都不支持,打出来会扫不动
     assert expected.version == 1
     assert len(expected.matrix) == 21
+
+
+def test_longest_possible_tag_still_fits_version_1(admin):
+    """编号长度上限必须卡在 QR version 1 的容量内。
+
+    前缀最长 5 + 连字符 + 4 位流水 = 10 个字符,正好是 version 1 在最高纠错
+    等级 H 下的字母数字容量。多一个字符就跳 version 2(25x25),模块变小,
+    12mm 标签会明显更难扫。
+    """
+    r = admin.post("/api/categories", json={"name": "灯光", "tag_prefix": "LIGHT"})
+    assert r.status_code == 201, r.text
+    asset = _make_asset_in(admin, r.json()["id"], "补光灯")
+    assert asset["asset_tag"] == "LIGHT-0001"
+    assert len(asset["asset_tag"]) == 10
+
+    q = segno.make(asset["asset_tag"], error="h", micro=False)
+    assert q.version == 1
+    assert len(q.matrix) == 21
+
+
+def test_prefix_longer_than_five_is_rejected(admin):
+    """6 位前缀会让编号变成 11 个字符,把二维码顶到 version 2。"""
+    r = admin.post("/api/categories", json={"name": "摄影棚", "tag_prefix": "STUDIO"})
+    assert r.status_code == 422
 
 
 # ---------- 扫码查询 ----------

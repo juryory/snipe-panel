@@ -75,9 +75,17 @@ def _make_qr(tag: str):
     micro=False 不能去掉:编号只有 7 个字符,segno 默认会挑 Micro QR(M3,15x15),
     而 ZXing 与浏览器 BarcodeDetector 都不支持 Micro QR —— 标签打出来我们自己的
     扫码页反而读不出。强制标准 QR version 1(21x21)。
-    error="m" 需与 12mm 标签的实际打样结果配套,改动前请重新打样实测(PRD 3.3)。
+
+    error="h"(30% 纠错)是免费的:version 1 在 H 级下仍能装 10 个字母数字字符,
+    而编号最长就是 10 个字符(前缀 5 + 连字符 + 4 位流水,见 CategoryCreate)。
+    也就是说码的尺寸一格没变,抗磨损能力却从 15% 提到 30%。设备标签会蹭脏、
+    磨损、被手指盖住一角,这个余量很值。
+    超过 10 个字符会跳到 version 2(25x25),模块变小、12mm 标签更难扫。
+
+    border=4 是 QR 规范要求的静默区,不能省。码四周留白不够时扫码器会找不到
+    定位图形 —— 在已经接近打印极限的 12mm 标签上,这是最不该省的地方。
     """
-    return segno.make(tag, error="m", micro=False)
+    return segno.make(tag, error="h", micro=False)
 
 
 @router.get("", response_model=Page[AssetOut])
@@ -211,7 +219,7 @@ def export_qrcodes(
     with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as zf:
         for a in rows:
             png = io.BytesIO()
-            _make_qr(a.asset_tag).save(png, kind="png", scale=8, border=2)
+            _make_qr(a.asset_tag).save(png, kind="png", scale=8, border=4)
             zf.writestr(f"{a.asset_tag}.png", png.getvalue())
     zip_buf.seek(0)
     return StreamingResponse(
@@ -282,7 +290,7 @@ def asset_qrcode(
 ):
     asset = _get_asset(db, asset_id)
     buf = io.BytesIO()
-    _make_qr(asset.asset_tag).save(buf, kind=format, scale=scale, border=2)
+    _make_qr(asset.asset_tag).save(buf, kind=format, scale=scale, border=4)
     media = "image/png" if format == "png" else "image/svg+xml"
     return Response(content=buf.getvalue(), media_type=media)
 

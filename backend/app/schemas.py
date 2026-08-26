@@ -93,7 +93,10 @@ class CategoryOut(BaseModel):
 
 class CategoryCreate(BaseModel):
     name: str = Field(min_length=1, max_length=64)
-    tag_prefix: str = Field(min_length=1, max_length=16, pattern=r"^[A-Za-z0-9]+$")
+    # 前缀最长 5:前缀 + 连字符 + 4 位流水 = 10 个字符,正好是 QR version 1 在
+    # 最高纠错等级 H 下的容量上限。再长一个字符就跳到 version 2(25x25),
+    # 模块变小,12mm 标签会明显更难扫(见 routers/assets.py 的 _make_qr)。
+    tag_prefix: str = Field(min_length=1, max_length=5, pattern=r"^[A-Za-z0-9]+$")
 
 
 class CategoryUpdate(BaseModel):
