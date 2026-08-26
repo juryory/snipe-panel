@@ -15,3 +15,10 @@ frontend/dist/
 .vscode/
 .idea/
 .DS_Store
+
+# 打包产物:51MB 的 snipe-panel.zip 曾被误提交进历史,拖垮了国内服务器的 git pull
+*.zip
+*.tar.gz
+*.tgz
+*.rar
+*.7z

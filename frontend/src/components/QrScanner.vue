@@ -16,7 +16,7 @@
 </template>
 
 <script setup>
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref } from 'vue'
 
 const props = defineProps({
   // 连续扫描:扫完不停,继续扫下一台(PRD 3.4,盘点用)
@@ -40,6 +40,13 @@ let rafId = null
 let stopped = false
 let lastText = ''
 let lastAt = 0
+
+// 摄像头当前是否已开。start/stop 会被多个来源触发(挂载、keep-alive 激活、
+// 页面重新可见),不去重的话会同时开出好几路流。
+let running = false
+// 组件是否处于「应该开着摄像头」的状态。被 keep-alive 切走后置 false,
+// 这样即便此时页面重新可见也不该偷偷把摄像头打开。
+let active = false
 
 function handleDecode(text) {
   const value = (text || '').trim()
@@ -119,8 +126,12 @@ async function useZxing() {
 }
 
 async function start() {
+  if (running) return
+  running = true
   stopped = false
+  hint.value = '正在启动摄像头…'
   if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+    running = false
     // 最常见的原因是页面不在 HTTPS 下(PRD 3.4)
     hint.value = ''
     emit('error', '当前浏览器无法调用摄像头。请确认页面通过 HTTPS 打开,或改用手动输入。')
@@ -131,9 +142,18 @@ async function start() {
       video: { facingMode: { ideal: 'environment' } },
       audio: false,
     })
+    // 等待期间可能已经被切走了(keep-alive 或切到别的 App),这时要把
+    // 刚拿到的流立刻还回去,否则摄像头会在后台一直亮着
+    if (!active) {
+      stream.getTracks().forEach((t) => t.stop())
+      stream = null
+      running = false
+      return
+    }
     videoEl.value.srcObject = stream
     await videoEl.value.play()
   } catch (err) {
+    running = false
     hint.value = ''
     const denied = err && err.name === 'NotAllowedError'
     emit(
@@ -157,8 +177,18 @@ async function start() {
   }
 }
 
+/** 切到别的 App 或锁屏时系统会回收摄像头,回来时 video 上挂的是条死流,画面全黑。 */
+function onVisibilityChange() {
+  if (document.hidden) {
+    stop()
+  } else if (active) {
+    start()
+  }
+}
+
 function stop() {
   stopped = true
+  running = false
   if (rafId) {
     cancelAnimationFrame(rafId)
     rafId = null
@@ -174,8 +204,30 @@ function stop() {
   if (videoEl.value) videoEl.value.srcObject = null
 }
 
-onMounted(start)
-onBeforeUnmount(stop)
+onMounted(() => {
+  active = true
+  start()
+  document.addEventListener('visibilitychange', onVisibilityChange)
+})
+
+// keep-alive 下的扫码页:切走时组件不销毁,onBeforeUnmount 不会触发,
+// 不在这里关掉的话摄像头会一直在后台占着;切回来时 onMounted 也不再执行,
+// 而 keep-alive 会把 DOM 摘出文档,<video> 一脱离文档就暂停 —— 回来就是黑屏。
+onActivated(() => {
+  active = true
+  start()
+})
+onDeactivated(() => {
+  active = false
+  stop()
+})
+
+onBeforeUnmount(() => {
+  active = false
+  stop()
+  document.removeEventListener('visibilitychange', onVisibilityChange)
+})
+
 defineExpose({ start, stop })
 </script>
 
