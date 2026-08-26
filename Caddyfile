@@ -1,0 +1,16 @@
+{$SITE_ADDRESS} {
+	encode gzip
+
+	# 后端同时提供 API 与前端静态文件,一个 upstream 即可
+	reverse_proxy app:8000
+
+	header {
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy same-origin
+	}
+
+	log {
+		output stdout
+	}
+}

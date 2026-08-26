@@ -1,0 +1,38 @@
+services:
+  app:
+    build: .
+    restart: unless-stopped
+    environment:
+      # 生产必须换掉:泄露即等于任何人都能伪造登录态
+      SNIPE_SECRET_KEY: ${SNIPE_SECRET_KEY:?请在 .env 中设置 SNIPE_SECRET_KEY}
+      # 经 Caddy 走 HTTPS,Cookie 必须带 Secure(PRD 3.7)
+      SNIPE_COOKIE_SECURE: "true"
+      SNIPE_INITIAL_ADMIN_USERNAME: ${SNIPE_INITIAL_ADMIN_USERNAME:-admin}
+      SNIPE_INITIAL_ADMIN_PASSWORD: ${SNIPE_INITIAL_ADMIN_PASSWORD:?请在 .env 中设置初始管理员密码}
+    volumes:
+      # SQLite 数据库 + 未来的设备照片。备份就是备份这个目录(PRD 第 4 节)
+      - snipe-data:/data
+    expose:
+      - "8000"
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      # 例:assets.example.com。Caddy 会自动申请并续期证书 ——
+      # 摄像头调用必须在 HTTPS 下才能工作(PRD 3.4)
+      SITE_ADDRESS: ${SITE_ADDRESS:?请在 .env 中设置对外域名}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - app
+
+volumes:
+  snipe-data:
+  caddy-data:
+  caddy-config:

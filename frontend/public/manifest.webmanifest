@@ -1,0 +1,14 @@
+{
+  "name": "设备资产管理系统",
+  "short_name": "设备台账",
+  "description": "扫码查看设备、办理借用与归还",
+  "start_url": "/m",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#1f2937",
+  "lang": "zh-CN",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
