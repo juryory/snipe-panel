@@ -287,4 +287,6 @@ class ActivityLog(Base):
     detail: Mapped[str] = mapped_column(Text, default="")
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
 
+    actor: Mapped[Optional[User]] = relationship()
+
     __table_args__ = (UniqueConstraint("id"),)

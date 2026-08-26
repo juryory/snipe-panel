@@ -22,6 +22,7 @@ from .routers import (
     companies,
     imports,
     inventory,
+    logs,
     repairs,
     users,
 )
@@ -79,6 +80,7 @@ app.include_router(companies.router)
 app.include_router(checkouts.router)
 app.include_router(inventory.router)
 app.include_router(repairs.router)
+app.include_router(logs.router)
 app.include_router(users.router)
 
 

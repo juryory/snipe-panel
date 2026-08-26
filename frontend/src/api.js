@@ -144,6 +144,8 @@ export const api = {
     request(`/api/users/${id}/reset-password`, { method: 'POST', body: { new_password } }),
 
   listCheckouts: (params) => request('/api/checkouts', { params }),
+  listLogs: (params) => request('/api/logs', { params }),
+  logActions: () => request('/api/logs/actions'),
   checkoutKit: (body) => request('/api/checkouts/kit', { method: 'POST', body }),
 
   // 报修

@@ -15,6 +15,10 @@ MVP(PRD 阶段一)后端与前端已完成:
 - 设备台账:搜索、筛选、分页、增删改(软删除)
 - 借出 / 归还、流转历史、逾期列表、我的设备
 - 盘库(滚动盘点):连续扫码批量盘、差异挂起与处理、超期未盘清单、盘库概览
+- 报修记录:故障描述、送修厂商、费用、保修判定、结案(修好 / 判废 / 误报)
+- 成套借用:相机 + 镜头 + 电池一起借,共用一个 kit_id,可拆开单还
+- Excel 批量导入 / 台账导出、操作日志页面、事件推送(n8n)
+- 数据库迁移(Alembic)
 - 设备复制(同型号批量录入)、序列号扫码录入(一维码 / 二维码 / DataMatrix)
 - 移动扫码页(取景框 + 手动输入兜底 + 连续扫码)
 - Docker Compose 部署
@@ -143,6 +147,40 @@ docker compose cp app:/data/backup.db ./backup-$(date +%F).db
 - **`border=4`** —— QR 规范要求的静默区。留白不够时扫码器找不到定位图形。在已经接近打印极限的 12mm 标签上,这是最不该省的地方。
 
 配套约束:**资产编号最长 10 个字符**,所以分类前缀限长 5 位(`CategoryCreate.tag_prefix`)。多一个字符就跳到 version 2(25×25),模块从 0.31mm 缩到 0.27mm,12mm 标签会明显更难扫。
+
+### 库结构改动必须走迁移
+
+`create_all` 只建缺失的表,**不给已存在的表加列**。线上一旦有真实数据,改模型
+就只能手写 ALTER 或删库重来。所以现在由 Alembic 管:
+
+```bash
+cd backend
+# 改完 models.py 之后
+./.venv/Scripts/python.exe -m alembic revision --autogenerate -m "说明"
+# 检查生成的脚本,尤其是部分唯一索引的 WHERE 条件有没有丢
+./.venv/Scripts/python.exe -m alembic upgrade head
+```
+
+应用启动时会自动 `upgrade head`,部署时不用手动跑。历史遗留库(接 Alembic
+之前用 create_all 建的)会先按基线打标记再升级。
+
+`tests/test_migrations.py` 守着「迁移产出的结构必须和模型一致」——**改了
+models.py 忘了生成迁移会在这里挂掉**,而不是等到线上升级时才发现。
+
+`alembic.ini` 必须保持纯 ASCII:Alembic 用系统 locale 读它,Windows 下是 GBK,
+写中文注释会 UnicodeDecodeError。
+
+### 事件推送与逾期提醒
+
+推给 n8n,由它转发企微/飞书。不直接推企微:消息格式、应用密钥、access_token
+续期都是它自己一套,写死了将来换飞书就得重写。
+
+- `SNIPE_WEBHOOK_URL` —— 借出 / 归还 / 报修时 POST 过去。**尽力而为**:
+  失败只记日志,绝不影响借还本身。设备已经交到人手上了,不能因为通知发不出去
+  就把这次借出回滚掉。推送在后台线程里发,不拖慢接口。
+- `SNIPE_WEBHOOK_TOKEN` —— 设了才开启 `GET /api/internal/overdue`,让 n8n
+  定时拉逾期清单(定时任务没法维持登录会话,所以走 Bearer 而不是 Cookie)。
+  **不设则该接口整个关闭**,不能默认裸奔在公网上。
 
 ### 前端是两个独立入口
 

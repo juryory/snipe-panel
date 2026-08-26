@@ -14,6 +14,7 @@
         <el-menu-item index="/admin/companies">采购公司</el-menu-item>
         <el-menu-item v-if="admin" index="/admin/categories">分类</el-menu-item>
         <el-menu-item v-if="admin" index="/admin/users">用户</el-menu-item>
+        <el-menu-item v-if="admin" index="/admin/logs">日志</el-menu-item>
         <el-menu-item index="mobile" @click="toMobile">扫码</el-menu-item>
       </el-menu>
       <el-dropdown @command="onCommand">

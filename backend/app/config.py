@@ -28,6 +28,10 @@ class Settings(BaseSettings):
     # 扫码查询限流(PRD 3.2:防止按编号规律枚举全量台账)
     by_tag_limit_per_minute: int = 60
 
+    # 事件推送:留空则不推。推给 n8n,由它转发企微/飞书(见 app/webhook.py)
+    webhook_url: str = ""
+    webhook_token: str = ""  # 非空则以 Authorization: Bearer 发出,供 n8n 校验
+
     # 库结构:置 0 时退回 create_all(仅测试用,见 app/schema.py)
     run_migrations: bool = True
 

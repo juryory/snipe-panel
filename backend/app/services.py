@@ -8,6 +8,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, joinedload
 
 from .config import settings
+from .webhook import emit
 from .models import (
     STATUS_LABELS,
     ActivityLog,
@@ -249,6 +250,13 @@ def open_repair(db: Session, asset: Asset, actor: User, symptom: str,
     if open_checkouts_for(db, [asset.id]).get(asset.id) is None:
         asset.status = AssetStatus.REPAIR
     log(db, actor.id, "repair_open", "asset", asset.id, f"{asset.asset_tag} 报修:{symptom[:40]}")
+    emit("repair_open", {
+        "asset_tag": asset.asset_tag,
+        "asset_name": asset.name,
+        "symptom": symptom,
+        "reported_by": actor.real_name or actor.username,
+        "under_warranty": record.under_warranty,
+    })
     return record
 
 
@@ -321,6 +329,14 @@ def checkout(db: Session, asset: Asset, borrower: User, operator: User,
         )
     log(db, operator.id, "checkout", "asset", asset.id,
         f"{asset.asset_tag} 借给 {borrower.real_name or borrower.username}")
+    emit("checkout", {
+        "asset_tag": asset.asset_tag,
+        "asset_name": asset.name,
+        "borrower": borrower.real_name or borrower.username,
+        "operator": operator.real_name or operator.username,
+        "due_at": due_at.isoformat() if due_at else None,
+        "kit_id": kit_id,
+    })
     return record
 
 
@@ -369,6 +385,13 @@ def checkin(db: Session, asset: Asset, operator: User, note: str = "") -> Checko
         record.note = f"{record.note}\n归还备注:{note}".strip()
     db.flush()
     log(db, operator.id, "checkin", "asset", asset.id, f"{asset.asset_tag} 归还")
+    emit("checkin", {
+        "asset_tag": asset.asset_tag,
+        "asset_name": asset.name,
+        "borrower": record.user.real_name or record.user.username if record.user else "",
+        "operator": operator.real_name or operator.username,
+        "was_overdue": record.due_at is not None and record.due_at < record.checked_in_at,
+    })
     return record
 
 

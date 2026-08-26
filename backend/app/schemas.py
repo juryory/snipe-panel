@@ -310,6 +310,18 @@ class AssetOut(BaseModel):
     updated_at: UtcDatetime
 
 
+# ---------- 操作日志 ----------
+class ActivityLogOut(BaseModel):
+    id: int
+    actor: str  # 姓名或用户名;系统自动产生的记作「系统」
+    action: str
+    action_label: str
+    target_type: str
+    target_id: Optional[int]
+    detail: str
+    created_at: UtcDatetime
+
+
 # ---------- 批量导入 ----------
 class ImportRowOut(BaseModel):
     row: int  # Excel 里的行号,方便对着改
