@@ -96,7 +96,7 @@
             <el-tag v-else type="success" size="small">无误</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="150" fixed="right">
+        <el-table-column label="操作" width="150" :fixed="narrow ? false : 'right'">
           <template #default="{ row }">
             <template v-if="row.pending">
               <el-button link type="primary" @click="resolve(row, 'apply')">采纳</el-button>
@@ -118,6 +118,7 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import { api, toast } from '../../api'
+import { useNarrow } from '../../useNarrow'
 import { fmtTime } from '../../format'
 import { displayName } from '../../store'
 
@@ -125,6 +126,7 @@ const router = useRouter()
 
 const days = ref(90)
 const summary = reactive({ total: 0, checked: 0, overdue: 0, pending_discrepancies: 0 })
+const narrow = useNarrow()
 const rows = ref([])
 const mode = ref(true) // true = 只看待处理差异
 const loadingSummary = ref(false)

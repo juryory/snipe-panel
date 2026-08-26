@@ -57,7 +57,7 @@
       <el-table-column prop="note" label="备注" min-width="160" show-overflow-tooltip>
         <template #default="{ row }">{{ row.note || '—' }}</template>
       </el-table-column>
-      <el-table-column v-if="admin" label="操作" width="130" fixed="right">
+      <el-table-column v-if="admin" label="操作" width="130" :fixed="narrow ? false : 'right'">
         <template #default="{ row }">
           <el-button link type="primary" @click="openForm(row)">编辑</el-button>
           <el-button link type="danger" @click="remove(row)">删除</el-button>
@@ -94,12 +94,14 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import { api, toast } from '../../api'
+import { useNarrow } from '../../useNarrow'
 import { displayStatus, fmtDate } from '../../format'
 import { isAdmin } from '../../store'
 
 const router = useRouter()
 const admin = isAdmin()
 
+const narrow = useNarrow()
 const rows = ref([])
 const assetsOf = reactive({})
 const loading = ref(false)

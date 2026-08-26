@@ -74,6 +74,19 @@ async function onCommand(command) {
   border-bottom: 1px solid #e5e7eb;
 }
 .shell__brand { font-weight: 600; white-space: nowrap; }
-.shell__menu { flex: 1; border-bottom: none; }
+.shell__menu { flex: 1; border-bottom: none; min-width: 0; }
 .shell__user { cursor: pointer; white-space: nowrap; }
+
+/* 手机上横向导航塞不下:标题让位,菜单自己横向滚动,别把后面的项挤出屏幕 */
+@media (max-width: 768px) {
+  .shell__header { gap: 8px; padding: 0 8px; }
+  .shell__brand { display: none; }
+  .shell__menu {
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    scrollbar-width: none;
+  }
+  .shell__menu::-webkit-scrollbar { display: none; }
+  .shell__menu :deep(.el-menu-item) { padding: 0 12px; }
+}
 </style>

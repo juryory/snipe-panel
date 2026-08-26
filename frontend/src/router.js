@@ -17,6 +17,7 @@ const routes = [
   { path: '/m', name: 'scan', component: () => import('./views/m/Scan.vue') },
   { path: '/m/a/:tag', name: 'm-asset', component: () => import('./views/m/AssetDetail.vue') },
   { path: '/m/mine', name: 'm-mine', component: () => import('./views/m/MyAssets.vue') },
+  { path: '/m/install', name: 'm-install', component: () => import('./views/m/Install.vue') },
 
   // 桌面后台
   { path: '/admin', redirect: '/admin/assets' },

@@ -1,7 +1,22 @@
 <template>
   <div class="stack">
     <el-card shadow="never">
-      <div class="filters">
+      <div v-if="narrow" class="filters filters--narrow">
+        <el-input
+          v-model="filters.q"
+          placeholder="搜索编号 / 名称 / SN / 责任人"
+          clearable
+          @keyup.enter="reload(1)"
+          @clear="reload(1)"
+        />
+        <el-button type="primary" @click="reload(1)">查询</el-button>
+        <el-button @click="filterDrawer = true">
+          筛选<span v-if="activeFilterCount">({{ activeFilterCount }})</span>
+        </el-button>
+        <el-button v-if="admin" type="primary" @click="openForm()">新增</el-button>
+      </div>
+
+      <div v-else class="filters">
         <el-input
           v-model="filters.q"
           placeholder="搜索编号 / 名称 / SN / 责任人"
@@ -43,7 +58,61 @@
     </el-card>
 
     <el-card shadow="never">
+      <!-- 窄屏:卡片列表。el-table 在手机上没法用,fixed 列会盖住整张表 -->
+      <div v-if="narrow" v-loading="loading" class="cards">
+        <el-empty v-if="!rows.length" description="没有符合条件的设备" />
+        <div v-for="row in rows" :key="row.id" class="mcard">
+          <div class="mcard__top">
+            <div class="mcard__id">
+              <div class="tag">{{ row.asset_tag }}</div>
+              <div class="mcard__name">{{ row.name }}</div>
+            </div>
+            <el-tag :type="displayStatus(row).type" size="small">
+              {{ displayStatus(row).label }}
+            </el-tag>
+          </div>
+
+          <div class="mcard__meta muted">
+            <div>{{ row.category_name }}<template v-if="row.brand || row.model"> · {{ [row.brand, row.model].filter(Boolean).join(' ') }}</template></div>
+            <div v-if="row.serial_no">SN {{ row.serial_no }}</div>
+            <div v-if="row.location">位置:{{ row.location }}</div>
+            <div v-if="row.company">采购自 {{ row.company.name }}</div>
+            <div v-if="row.owner">责任人:{{ displayName(row.owner) }}</div>
+            <div v-if="row.current_checkout">
+              借用人:{{ displayName(row.current_checkout.user) }}
+            </div>
+            <div>
+              盘库:
+              <template v-if="row.last_check">
+                {{ fmtTime(row.last_check.checked_at) }} · {{ displayName(row.last_check.checked_by) }}
+              </template>
+              <template v-else>从未盘库</template>
+            </div>
+          </div>
+
+          <div class="mcard__actions">
+            <el-button size="small" @click="showQr(row)">二维码</el-button>
+            <el-button size="small" type="warning" plain @click="openCheck(row)">盘库</el-button>
+            <el-button v-if="!row.is_checked_out" size="small" type="primary" plain @click="openCheckout(row)">
+              借出
+            </el-button>
+            <el-button v-else size="small" type="success" plain @click="doCheckin(row)">归还</el-button>
+            <el-dropdown v-if="admin" @command="(c) => onRowCommand(c, row)">
+              <el-button size="small">更多 ▾</el-button>
+              <template #dropdown>
+                <el-dropdown-menu>
+                  <el-dropdown-item command="edit">编辑</el-dropdown-item>
+                  <el-dropdown-item command="duplicate">复制</el-dropdown-item>
+                  <el-dropdown-item command="delete" divided>删除</el-dropdown-item>
+                </el-dropdown-menu>
+              </template>
+            </el-dropdown>
+          </div>
+        </div>
+      </div>
+
       <el-table
+        v-else
         v-loading="loading"
         :data="rows"
         row-key="id"
@@ -100,7 +169,7 @@
 
       <el-pagination
         style="margin-top: 12px; justify-content: flex-end"
-        layout="total, sizes, prev, pager, next"
+        :layout="narrow ? 'total, prev, pager, next' : 'total, sizes, prev, pager, next'"
         :total="total"
         :current-page="page"
         :page-size="pageSize"
@@ -190,6 +259,46 @@
       </div>
     </el-dialog>
 
+    <!-- 窄屏筛选抽屉:选择器太多,平铺在手机上占满整屏 -->
+    <el-drawer v-model="filterDrawer" title="筛选" direction="btt" size="auto">
+      <el-form label-position="top">
+        <el-form-item label="分类">
+          <el-select v-model="filters.category_id" placeholder="全部分类" clearable style="width: 100%">
+            <el-option v-for="c in categories" :key="c.id" :label="c.name" :value="c.id" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="采购公司">
+          <el-select v-model="filters.company_id" placeholder="全部采购公司" clearable filterable style="width: 100%">
+            <el-option v-for="c in companies" :key="c.id" :label="c.name" :value="c.id" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="状态">
+          <el-select v-model="filters.status" placeholder="全部状态" clearable style="width: 100%">
+            <el-option label="在库" value="in_stock" />
+            <el-option label="维修" value="repair" />
+            <el-option label="报废" value="retired" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="借出情况">
+          <el-select v-model="filters.checked_out" placeholder="不限" clearable style="width: 100%">
+            <el-option label="借出中" :value="true" />
+            <el-option label="未借出" :value="false" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="盘库情况">
+          <el-select v-model="filters.unchecked_days" placeholder="不限" clearable style="width: 100%">
+            <el-option label="超 30 天未盘库" :value="30" />
+            <el-option label="超 90 天未盘库" :value="90" />
+            <el-option label="超 180 天未盘库" :value="180" />
+          </el-select>
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="resetFilters">重置</el-button>
+        <el-button type="primary" @click="applyFilters">查看结果</el-button>
+      </template>
+    </el-drawer>
+
     <CheckDialog v-model="checkVisible" :asset="checkAsset" @done="reload()" />
 
     <!-- 借出 -->
@@ -223,11 +332,14 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import CheckDialog from '../../components/CheckDialog.vue'
 import ScanInput from '../../components/ScanInput.vue'
 import { api, toast } from '../../api'
+import { useNarrow } from '../../useNarrow'
 import { displayStatus, fmtTime } from '../../format'
 import { displayName, isAdmin, session } from '../../store'
 
 const admin = isAdmin()
 const route = useRoute()
+const narrow = useNarrow()
+const filterDrawer = ref(false)
 
 const rows = ref([])
 const categories = ref([])
@@ -394,6 +506,32 @@ function downloadQr(format) {
   link.click()
 }
 
+const activeFilterCount = computed(
+  () =>
+    [filters.category_id, filters.company_id, filters.status, filters.checked_out, filters.unchecked_days]
+      .filter((v) => v !== null && v !== undefined && v !== '').length,
+)
+
+function applyFilters() {
+  filterDrawer.value = false
+  reload(1)
+}
+
+function resetFilters() {
+  Object.assign(filters, {
+    category_id: null, company_id: null, status: null, checked_out: null, unchecked_days: null,
+  })
+  filterDrawer.value = false
+  reload(1)
+}
+
+/** 窄屏卡片上「更多」菜单里的动作。 */
+function onRowCommand(command, row) {
+  if (command === 'edit') openForm(row)
+  else if (command === 'duplicate') duplicate(row)
+  else if (command === 'delete') remove(row)
+}
+
 function openCheck(row) {
   checkAsset.value = row
   checkVisible.value = true
@@ -472,6 +610,16 @@ onMounted(async () => {
 
 <style scoped>
 .filters { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.filters--narrow { gap: 8px; }
+.filters--narrow .el-input { flex: 1 1 100%; }
+
+.cards { display: flex; flex-direction: column; gap: 10px; }
+.mcard { border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px; }
+.mcard__top { display: flex; justify-content: space-between; gap: 8px; align-items: flex-start; }
+.mcard__id { min-width: 0; }
+.mcard__name { font-weight: 600; margin-top: 2px; word-break: break-all; }
+.mcard__meta { font-size: 13px; line-height: 1.8; margin-top: 8px; }
+.mcard__actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .filters__spacer { flex: 1; }
 .tag { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .hint { font-size: 12px; line-height: 1.5; }

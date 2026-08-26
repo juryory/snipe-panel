@@ -45,7 +45,7 @@
           </div>
         </template>
       </el-table-column>
-      <el-table-column label="操作" width="90" fixed="right">
+      <el-table-column label="操作" width="90" :fixed="narrow ? false : 'right'">
         <template #default="{ row }">
           <el-button v-if="!row.checked_in_at" link type="success" @click="checkin(row)">归还</el-button>
         </template>
@@ -59,9 +59,11 @@ import { onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 
 import { api, toast } from '../../api'
+import { useNarrow } from '../../useNarrow'
 import { fmtTime } from '../../format'
 import { displayName } from '../../store'
 
+const narrow = useNarrow()
 const rows = ref([])
 const loading = ref(false)
 const mode = ref('open')

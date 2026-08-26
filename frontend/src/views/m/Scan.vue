@@ -12,6 +12,7 @@
           <el-button link type="primary">{{ myName }} ▾</el-button>
           <template #dropdown>
             <el-dropdown-menu>
+              <el-dropdown-item command="install">装到手机桌面</el-dropdown-item>
               <el-dropdown-item v-if="admin" command="admin">后台管理</el-dropdown-item>
               <el-dropdown-item command="password">修改密码</el-dropdown-item>
               <el-dropdown-item command="logout" divided>退出登录</el-dropdown-item>
@@ -198,6 +199,10 @@ async function onManual() {
 
 /** 移动端此前没有任何退出入口 —— 普通用户看不到后台的导航栏,只能清缓存。 */
 async function onAccount(command) {
+  if (command === 'install') {
+    router.push({ name: 'm-install' })
+    return
+  }
   if (command === 'admin') {
     router.push('/admin/assets')
     return
