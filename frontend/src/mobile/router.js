@@ -26,6 +26,8 @@ const routes = [
   { path: '/mine', name: 'mine', component: () => import('./views/Mine.vue'), meta: { tab: 'mine' } },
 
   { path: '/a/:tag', name: 'asset', component: () => import('./views/AssetDetail.vue'), meta: { plain: true } },
+  { path: '/asset/new', name: 'asset-new', component: () => import('./views/AssetForm.vue'), meta: { plain: true, admin: true } },
+  { path: '/asset/:id/edit', name: 'asset-edit', component: () => import('./views/AssetForm.vue'), meta: { plain: true, admin: true } },
   { path: '/install', name: 'install', component: () => import('./views/Install.vue'), meta: { plain: true } },
 
   { path: '/:pathMatch(.*)*', redirect: '/scan' },
@@ -53,5 +55,6 @@ router.beforeEach(async (to) => {
   if (session.user.must_change_password && !to.meta.allowBeforePasswordChange) {
     return { name: 'change-password' }
   }
+  if (to.meta.admin && session.user.role !== 'admin') return { name: 'assets' }
   return true
 })

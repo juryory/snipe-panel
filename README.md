@@ -155,6 +155,9 @@ docker compose cp app:/data/backup.db ./backup-$(date +%F).db
 两个入口各自打包,手机用户不会白下载一整套桌面组件;将来手机端要套 App 壳或
 重写成小程序,只动这一半。
 
+手机端是完整的一套,不只是只读:扫码、借还、盘库、台账浏览,以及**设备的新增 /
+编辑 / 复制 / 删除 / 二维码**。管理员在手机上不必再跳回后台。
+
 **共享的东西只能是 UI 无关的**:`api.js`、`format.js`、`store.js`、`QrScanner.vue`。
 `api.js` 里的 `toast()` 因此不能直接 `import { ElMessage }` —— 那会把整个
 Element Plus 拖进手机端的包(实测多下载 1 MB)。改成各入口用

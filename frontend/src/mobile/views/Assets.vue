@@ -3,9 +3,7 @@
   <div>
     <van-nav-bar title="设备台账">
       <template #right>
-        <span @click="filterShow = true">
-          筛选<span v-if="activeCount">({{ activeCount }})</span>
-        </span>
+        <span v-if="admin" @click="$router.push({ name: 'asset-new' })">新增</span>
       </template>
     </van-nav-bar>
 
@@ -16,7 +14,11 @@
       @search="reload"
       @clear="reload"
     >
-      <template #action><div @click="reload">搜索</div></template>
+      <template #action>
+        <div @click="filterShow = true">
+          筛选<span v-if="activeCount">({{ activeCount }})</span>
+        </div>
+      </template>
     </van-search>
 
     <div v-if="activeCount" class="chips">
@@ -106,7 +108,7 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onActivated, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import {
   Button as VanButton,
@@ -125,12 +127,13 @@ import {
 
 import { api, ApiError } from '../../api'
 import { displayStatus, fmtTime } from '../../format'
-import { displayName } from '../../store'
+import { dirty, displayName, isAdmin } from '../../store'
 
 defineOptions({ name: 'MobileAssets' })
 
 const PAGE_SIZE = 20
 const router = useRouter()
+const admin = isAdmin()
 
 const rows = ref([])
 const page = ref(0)
@@ -311,6 +314,13 @@ async function loadMore() {
 function open(row) {
   router.push(`/a/${encodeURIComponent(row.asset_tag)}`)
 }
+
+onActivated(() => {
+  if (dirty.assets) {
+    dirty.assets = false
+    reload()
+  }
+})
 
 onMounted(async () => {
   try {

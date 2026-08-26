@@ -72,6 +72,13 @@
         </template>
 
         <van-button round block plain @click="checkVisible = true">盘库</van-button>
+
+        <div class="row2">
+          <van-button round block plain icon="qr" @click="qrVisible = true">二维码</van-button>
+          <van-button v-if="admin" round block plain icon="more-o" @click="moreVisible = true">
+            更多
+          </van-button>
+        </div>
         <p v-if="asset.last_check" class="muted tip">
           上次盘库 {{ fmtTime(asset.last_check.checked_at) }} ·
           {{ displayName(asset.last_check.checked_by) }}
@@ -128,14 +135,34 @@
       />
     </van-popup>
 
+    <!-- 二维码:补打标签、或现场核对码能不能扫出来 -->
+    <van-popup v-model:show="qrVisible" round teleport="body">
+      <div v-if="asset" class="qr">
+        <img :src="qrSrc" alt="二维码" class="qr__img" />
+        <div class="qr__tag tag-mono">{{ asset.asset_tag }}</div>
+        <p class="muted qr__note">
+          码里只有这串编号,没有链接。系统外的扫码器扫到也查不到任何信息。
+        </p>
+      </div>
+    </van-popup>
+
+    <van-action-sheet
+      v-model:show="moreVisible"
+      :actions="moreActions"
+      cancel-text="取消"
+      close-on-click-action
+      @select="onMore"
+    />
+
     <CheckSheet v-model:show="checkVisible" :asset="asset" @done="load" />
   </div>
 </template>
 
 <script setup>
 import { computed, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import {
+  ActionSheet as VanActionSheet,
   Button as VanButton,
   Cell as VanCell,
   CellGroup as VanCellGroup,
@@ -149,6 +176,7 @@ import {
   Tab as VanTab,
   Tabs as VanTabs,
   Tag as VanTag,
+  showConfirmDialog,
   showFailToast,
   showSuccessToast,
 } from 'vant'
@@ -156,9 +184,19 @@ import {
 import CheckSheet from '../components/CheckSheet.vue'
 import { api, ApiError } from '../../api'
 import { displayStatus, fmtTime } from '../../format'
-import { displayName } from '../../store'
+import { displayName, isAdmin, markAssetsDirty } from '../../store'
 
 const route = useRoute()
+const router = useRouter()
+const admin = isAdmin()
+
+const qrVisible = ref(false)
+const moreVisible = ref(false)
+const moreActions = [
+  { name: '编辑', key: 'edit' },
+  { name: '复制为新设备', key: 'duplicate' },
+  { name: '删除', key: 'delete', color: '#ee0a24' },
+]
 
 const asset = ref(null)
 const history = ref([])
@@ -176,6 +214,36 @@ const dueAt = ref(null)
 
 const badge = computed(() => displayStatus(asset.value))
 const dueLabel = computed(() => (dueAt.value ? dueAt.value.toLocaleDateString('zh-CN') : ''))
+const qrSrc = computed(() => (asset.value ? api.qrcodeUrl(asset.value.id, 'png', 10) : ''))
+
+async function onMore(action) {
+  if (action.key === 'edit') {
+    router.push({ name: 'asset-edit', params: { id: asset.value.id } })
+    return
+  }
+  if (action.key === 'duplicate') {
+    router.push({ name: 'asset-new', query: { from: asset.value.id } })
+    return
+  }
+  try {
+    await showConfirmDialog({
+      title: '删除设备',
+      message: `确认删除「${asset.value.asset_tag} ${asset.value.name}」?删除后不再出现在台账中,借还与盘库历史仍保留。`,
+      confirmButtonText: '删除',
+      confirmButtonColor: '#ee0a24',
+    })
+  } catch {
+    return
+  }
+  try {
+    await api.deleteAsset(asset.value.id)
+    showSuccessToast('已删除')
+    markAssetsDirty()
+    router.replace('/assets')
+  } catch (err) {
+    showFailToast(err instanceof ApiError ? err.detail : String(err))
+  }
+}
 
 function onDueConfirm({ selectedValues }) {
   const [y, m, d] = selectedValues.map(Number)
@@ -244,5 +312,10 @@ watch(() => route.params.tag, load, { immediate: true })
 .block { margin-top: 12px; }
 .actions { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
 .tip { font-size: 12px; text-align: center; margin: 0; }
+.row2 { display: flex; gap: 12px; }
+.qr { padding: 24px; text-align: center; width: 260px; }
+.qr__img { width: 200px; height: 200px; image-rendering: pixelated; }
+.qr__tag { font-size: 18px; font-weight: 600; margin: 10px 0; }
+.qr__note { font-size: 12px; line-height: 1.6; text-align: left; margin: 0; }
 .overdue { color: #ee0a24; font-weight: 600; }
 </style>
