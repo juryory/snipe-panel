@@ -71,7 +71,15 @@
           placeholder="不指定"
           readonly
           is-link
-          @click="datePicker = true"
+          @click="openDate('purchased_at')"
+        />
+        <van-field
+          :model-value="form.warranty_until || ''"
+          label="保修到期"
+          placeholder="不指定"
+          readonly
+          is-link
+          @click="openDate('warranty_until')"
         />
         <PickerField
           v-if="editing"
@@ -106,7 +114,7 @@
 
     <van-popup v-model:show="datePicker" position="bottom" round teleport="body">
       <van-date-picker
-        title="采购日期"
+        :title="dateField === 'purchased_at' ? '采购日期' : '保修到期'"
         :min-date="minDate"
         :max-date="maxDate"
         @cancel="datePicker = false"
@@ -147,7 +155,7 @@ const route = useRoute()
 const router = useRouter()
 
 const minDate = new Date(2000, 0, 1)
-const maxDate = new Date()
+const maxDate = new Date(new Date().getFullYear() + 20, 11, 31)
 
 const loading = ref(true)
 const saving = ref(false)
@@ -181,6 +189,7 @@ const form = reactive({
   company_id: null,
   status: 'in_stock',
   purchased_at: null,
+  warranty_until: null,
   note: '',
 })
 
@@ -192,8 +201,15 @@ const companyOptions = computed(() =>
 )
 const userOptions = computed(() => users.value.map((u) => ({ text: displayName(u), value: u.id })))
 
+const dateField = ref('purchased_at')
+
+function openDate(field) {
+  dateField.value = field
+  datePicker.value = true
+}
+
 function onDate({ selectedValues }) {
-  form.purchased_at = selectedValues.join('-')
+  form[dateField.value] = selectedValues.join('-')
   datePicker.value = false
 }
 
@@ -212,6 +228,7 @@ function fill(asset, { keepIdentity }) {
     company_id: asset.company ? asset.company.id : null,
     status: asset.status,
     purchased_at: asset.purchased_at,
+    warranty_until: asset.warranty_until,
     note: asset.note,
   })
 }

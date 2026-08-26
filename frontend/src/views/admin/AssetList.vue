@@ -136,6 +136,9 @@
         <el-table-column label="状态" width="100">
           <template #default="{ row }">
             <el-tag :type="displayStatus(row).type" size="small">{{ displayStatus(row).label }}</el-tag>
+            <el-tag v-if="row.open_repair_id" type="danger" size="small" style="margin-left: 4px">
+              维修中
+            </el-tag>
           </template>
         </el-table-column>
         <el-table-column label="责任人 / 借用人" min-width="150">
@@ -233,6 +236,10 @@
         </el-form-item>
         <el-form-item label="采购日期">
           <el-date-picker v-model="form.purchased_at" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
+        </el-form-item>
+        <el-form-item label="保修到期">
+          <el-date-picker v-model="form.warranty_until" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
+          <div class="muted hint">报修时会自动判断走保修还是自费。</div>
         </el-form-item>
         <el-form-item label="备注">
           <el-input v-model="form.note" type="textarea" :rows="2" />
@@ -369,6 +376,7 @@ const emptyForm = () => ({
   company_id: null,
   status: 'in_stock',
   purchased_at: null,
+  warranty_until: null,
   note: '',
 })
 const form = reactive(emptyForm())
@@ -428,6 +436,7 @@ function openForm(row) {
       company_id: row.company ? row.company.id : null,
       status: row.status,
       purchased_at: row.purchased_at,
+      warranty_until: row.warranty_until,
       note: row.note,
     })
   }

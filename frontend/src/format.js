@@ -15,6 +15,8 @@ export function fmtDate(value) {
 /** 设备的展示状态:借出是派生状态(PRD 3.5),优先于 status 显示。 */
 export function displayStatus(asset) {
   if (!asset) return { label: '', type: 'info' }
+  // 在修优先于在库:设备虽然没借出去,但也不能借
+  if (asset.open_repair_id) return { label: '维修中', type: 'danger' }
   if (asset.is_checked_out) {
     const overdue = asset.current_checkout && asset.current_checkout.is_overdue
     return { label: overdue ? '逾期未还' : '借出', type: overdue ? 'danger' : 'warning' }

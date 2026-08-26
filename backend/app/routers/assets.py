@@ -48,6 +48,7 @@ from ..services import (
     last_checks_for,
     log,
     open_checkouts_for,
+    open_repairs_for,
     record_inventory_check,
     record_out,
 )
@@ -75,11 +76,12 @@ def _get_asset(db: Session, asset_id: int) -> Asset:
 
 
 def _one(db: Session, asset: Asset) -> AssetOut:
-    """单台设备的完整输出:借出状态和最后盘库都是派生的,统一在这里补齐。"""
+    """单台设备的完整输出:借出、最后盘库、在修都是派生的,统一在这里补齐。"""
     return asset_out(
         asset,
         open_checkouts_for(db, [asset.id]).get(asset.id),
         last_checks_for(db, [asset.id]).get(asset.id),
+        open_repairs_for(db, [asset.id]).get(asset.id),
     )
 
 

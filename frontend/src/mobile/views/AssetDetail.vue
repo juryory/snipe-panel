@@ -15,12 +15,27 @@
         <van-tag :type="badge.type" size="large" round>{{ badge.label }}</van-tag>
       </div>
 
+      <van-notice-bar
+        v-if="openRepair"
+        left-icon="warning-o"
+        wrapable
+        :scrollable="false"
+        :text="`维修中:${openRepair.symptom}(已 ${openRepair.days_open} 天)`"
+      />
+
       <van-cell-group inset class="block">
         <van-cell title="分类" :value="asset.category_name || '—'" />
         <van-cell title="品牌型号" :value="[asset.brand, asset.model].filter(Boolean).join(' ') || '—'" />
         <van-cell title="序列号" :value="asset.serial_no || '—'" />
         <van-cell title="存放位置" :value="asset.location || '—'" />
         <van-cell title="采购公司" :value="asset.company ? asset.company.name : '—'" />
+        <van-cell v-if="asset.warranty_until" title="保修到期">
+          <template #value>
+            <span :class="{ expired: asset.warranty_valid === false }">
+              {{ asset.warranty_until }}{{ asset.warranty_valid === false ? '(已过保)' : '' }}
+            </span>
+          </template>
+        </van-cell>
         <van-cell title="长期责任人" :value="asset.owner ? displayName(asset.owner) : '—'" />
         <van-cell v-if="asset.note" title="备注" :label="asset.note" />
       </van-cell-group>
@@ -73,6 +88,17 @@
 
         <van-button round block plain @click="checkVisible = true">盘库</van-button>
 
+        <van-button
+          v-if="!openRepair"
+          round
+          block
+          plain
+          type="danger"
+          @click="repairVisible = true"
+        >
+          报修
+        </van-button>
+
         <div class="row2">
           <van-button round block plain icon="qr" @click="qrVisible = true">二维码</van-button>
           <van-button v-if="admin" round block plain icon="more-o" @click="moreVisible = true">
@@ -100,6 +126,25 @@
               </template>
               <template #right-icon>
                 <van-tag v-if="!r.checked_in_at" type="warning">未归还</van-tag>
+              </template>
+            </van-cell>
+          </van-cell-group>
+        </van-tab>
+
+        <van-tab title="报修">
+          <van-empty v-if="!repairs.length" description="没有报修记录" :image-size="60" />
+          <van-cell-group v-else>
+            <van-cell v-for="r in repairs" :key="r.id" :title="r.symptom">
+              <template #label>
+                {{ displayName(r.reported_by) }} 报于 {{ fmtTime(r.reported_at) }}
+                <div v-if="r.vendor">送修:{{ r.vendor.name }}</div>
+                <div v-if="r.cost_yuan !== null">费用:{{ r.cost_yuan }} 元
+                  <span v-if="r.under_warranty">(保修)</span>
+                </div>
+              </template>
+              <template #right-icon>
+                <van-tag v-if="r.is_open" type="danger">维修中 {{ r.days_open }}天</van-tag>
+                <van-tag v-else type="success">{{ r.result_label }}</van-tag>
               </template>
             </van-cell>
           </van-cell-group>
@@ -154,6 +199,8 @@
       @select="onMore"
     />
 
+    <RepairSheet v-model:show="repairVisible" :asset="asset" @done="load" />
+
     <CheckSheet v-model:show="checkVisible" :asset="asset" @done="load" />
   </div>
 </template>
@@ -182,6 +229,7 @@ import {
 } from 'vant'
 
 import CheckSheet from '../components/CheckSheet.vue'
+import RepairSheet from '../components/RepairSheet.vue'
 import { api, ApiError } from '../../api'
 import { displayStatus, fmtTime } from '../../format'
 import { displayName, isAdmin, markAssetsDirty } from '../../store'
@@ -206,6 +254,9 @@ const acting = ref(false)
 const error = ref('')
 const tab = ref(0)
 const checkVisible = ref(false)
+const repairVisible = ref(false)
+const repairs = ref([])
+const openRepair = computed(() => repairs.value.find((r) => r.is_open) || null)
 
 const today = new Date()
 const duePicker = ref(false)
@@ -257,9 +308,10 @@ async function load() {
   error.value = ''
   try {
     asset.value = await api.getAssetByTag(route.params.tag)
-    ;[history.value, checks.value] = await Promise.all([
+    ;[history.value, checks.value, repairs.value] = await Promise.all([
       api.assetHistory(asset.value.id),
       api.assetChecks(asset.value.id),
+      api.assetRepairs(asset.value.id),
     ])
   } catch (err) {
     asset.value = null
@@ -318,4 +370,5 @@ watch(() => route.params.tag, load, { immediate: true })
 .qr__tag { font-size: 18px; font-weight: 600; margin: 10px 0; }
 .qr__note { font-size: 12px; line-height: 1.6; text-align: left; margin: 0; }
 .overdue { color: #ee0a24; font-weight: 600; }
+.expired { color: #ee0a24; }
 </style>

@@ -23,6 +23,7 @@ const routes = [
   { path: '/admin/users', name: 'admin-users', component: () => import('./views/admin/Users.vue'), meta: { admin: true } },
   { path: '/admin/checkouts', name: 'admin-checkouts', component: () => import('./views/admin/Checkouts.vue') },
   { path: '/admin/inventory', name: 'admin-inventory', component: () => import('./views/admin/Inventory.vue') },
+  { path: '/admin/repairs', name: 'admin-repairs', component: () => import('./views/admin/Repairs.vue') },
 
   { path: '/:pathMatch(.*)*', redirect: '/admin/assets' },
 ]

@@ -145,6 +145,14 @@ export const api = {
 
   listCheckouts: (params) => request('/api/checkouts', { params }),
 
+  // 报修
+  reportRepair: (assetId, body) =>
+    request(`/api/assets/${assetId}/repairs`, { method: 'POST', body }),
+  assetRepairs: (assetId) => request(`/api/assets/${assetId}/repairs`),
+  listRepairs: (params) => request('/api/repairs', { params }),
+  updateRepair: (id, body) => request(`/api/repairs/${id}`, { method: 'PUT', body }),
+  closeRepair: (id, body) => request(`/api/repairs/${id}/close`, { method: 'POST', body }),
+
   // 盘库(滚动盘点)
   checkAsset: (id, body) => request(`/api/assets/${id}/check`, { method: 'POST', body }),
   assetChecks: (id) => request(`/api/assets/${id}/checks`),

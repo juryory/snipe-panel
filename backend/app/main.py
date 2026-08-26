@@ -22,6 +22,7 @@ from .routers import (
     companies,
     imports,
     inventory,
+    repairs,
     users,
 )
 from .security import hash_password
@@ -77,6 +78,7 @@ app.include_router(categories.router)
 app.include_router(companies.router)
 app.include_router(checkouts.router)
 app.include_router(inventory.router)
+app.include_router(repairs.router)
 app.include_router(users.router)
 
 

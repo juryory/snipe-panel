@@ -10,6 +10,7 @@
         <el-menu-item index="/admin/assets">设备台账</el-menu-item>
         <el-menu-item index="/admin/checkouts">借还记录</el-menu-item>
         <el-menu-item index="/admin/inventory">盘库</el-menu-item>
+        <el-menu-item index="/admin/repairs">报修</el-menu-item>
         <el-menu-item index="/admin/companies">采购公司</el-menu-item>
         <el-menu-item v-if="admin" index="/admin/categories">分类</el-menu-item>
         <el-menu-item v-if="admin" index="/admin/users">用户</el-menu-item>

@@ -4,7 +4,7 @@ from typing import Annotated, Generic, List, Literal, Optional, TypeVar
 
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field
 
-from .models import AssetStatus, Role
+from .models import AssetStatus, RepairResult, Role
 
 T = TypeVar("T")
 
@@ -185,6 +185,49 @@ class ResolveCheckIn(BaseModel):
     action: Literal["apply", "dismiss"]
 
 
+# ---------- 报修 ----------
+class RepairOpenIn(BaseModel):
+    symptom: str = Field(min_length=1, max_length=2000)
+    vendor_id: Optional[int] = None
+    note: str = ""
+
+
+class RepairUpdateIn(BaseModel):
+    symptom: Optional[str] = Field(default=None, min_length=1, max_length=2000)
+    vendor_id: Optional[int] = None
+    cost_yuan: Optional[float] = Field(default=None, ge=0)
+    under_warranty: Optional[bool] = None
+    note: Optional[str] = None
+
+
+class RepairCloseIn(BaseModel):
+    result: RepairResult
+    cost_yuan: Optional[float] = Field(default=None, ge=0)
+    under_warranty: Optional[bool] = None
+    note: str = ""
+
+
+class RepairOut(BaseModel):
+    id: int
+    asset_id: int
+    asset_tag: str
+    asset_name: str
+    reported_by: UserBrief
+    reported_at: UtcDatetime
+    symptom: str
+    vendor: Optional[CompanyBrief]
+    # 出口用「元」,库里存「分」—— 用浮点存钱迟早出现 0.1+0.2 这种账
+    cost_yuan: Optional[float]
+    under_warranty: bool
+    note: str
+    is_open: bool
+    days_open: int
+    resolved_at: Optional[UtcDatetime]
+    resolved_by: Optional[UserBrief]
+    result: Optional[RepairResult]
+    result_label: str
+
+
 # ---------- 设备 ----------
 class AssetBase(BaseModel):
     name: str = Field(min_length=1, max_length=128)
@@ -194,6 +237,7 @@ class AssetBase(BaseModel):
     location: str = ""
     owner_user_id: Optional[int] = None
     purchased_at: Optional[date] = None
+    warranty_until: Optional[date] = None
     company_id: Optional[int] = None
     note: str = ""
 
@@ -219,6 +263,7 @@ class AssetUpdate(BaseModel):
     location: Optional[str] = None
     owner_user_id: Optional[int] = None
     purchased_at: Optional[date] = None
+    warranty_until: Optional[date] = None
     company_id: Optional[int] = None
     note: Optional[str] = None
 
@@ -249,6 +294,8 @@ class AssetOut(BaseModel):
     location: str
     owner: Optional[UserBrief]
     purchased_at: Optional[date]
+    warranty_until: Optional[date]
+    warranty_valid: Optional[bool]  # 保修是否还在有效期内;没填到期日则为 None
     company: Optional[CompanyBrief]
     note: str
     photo_url: Optional[str]
@@ -257,6 +304,8 @@ class AssetOut(BaseModel):
     current_checkout: Optional[CheckoutBrief]
     # 滚动盘点:最后一次盘库,同样派生自 inventory_checks,不存字段
     last_check: Optional[InventoryCheckBrief]
+    # 在修中同样是派生的:存在未完结的报修记录
+    open_repair_id: Optional[int]
     created_at: UtcDatetime
     updated_at: UtcDatetime
 

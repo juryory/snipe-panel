@@ -125,6 +125,8 @@ class Asset(Base):
     # PRD 3.1:长期责任人,借还流程不修改此字段
     owner_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
     purchased_at: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    # 保修到期日。报修时要一眼看出是走保修还是自费
+    warranty_until: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     # 采购公司。设备可能是历史遗留、没有采购记录,故可空
     company_id: Mapped[Optional[int]] = mapped_column(ForeignKey("companies.id"), nullable=True)
     note: Mapped[str] = mapped_column(Text, default="")
@@ -217,6 +219,61 @@ class InventoryCheck(Base):
             self.observed_location != self.location_at_check
             or self.observed_status != self.status_at_check
         )
+
+
+class RepairResult(str, enum.Enum):
+    FIXED = "fixed"          # 已修好
+    SCRAPPED = "scrapped"    # 判定报废
+    CANCELLED = "cancelled"  # 误报,设备没问题
+
+
+REPAIR_RESULT_LABELS = {
+    RepairResult.FIXED: "已修好",
+    RepairResult.SCRAPPED: "判定报废",
+    RepairResult.CANCELLED: "误报",
+}
+
+
+class RepairRecord(Base):
+    """报修记录。
+
+    「状态=维修」只说明设备现在不能用,说不出**为什么修、送去哪了、什么时候回来**。
+    实际场景里一台相机送修三周,期间谁都不知道它在哪 —— 这张表就是补这个。
+    """
+
+    __tablename__ = "repair_records"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    asset_id: Mapped[int] = mapped_column(ForeignKey("assets.id"), index=True)
+    reported_by_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    reported_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, index=True)
+
+    symptom: Mapped[str] = mapped_column(Text)  # 故障描述
+    # 送修给谁。多半就是当初的采购公司,故复用 companies
+    vendor_id: Mapped[Optional[int]] = mapped_column(ForeignKey("companies.id"), nullable=True)
+    # 费用存「分」:SQLite 没有真正的定点数,用浮点存钱迟早出现 0.1+0.2 这种账
+    cost_cents: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    under_warranty: Mapped[bool] = mapped_column(Boolean, default=False)
+    note: Mapped[str] = mapped_column(Text, default="")
+
+    resolved_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    resolved_by_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    result: Mapped[Optional[RepairResult]] = mapped_column(Enum(RepairResult), nullable=True)
+
+    asset: Mapped[Asset] = relationship()
+    reported_by: Mapped[User] = relationship(foreign_keys=[reported_by_id])
+    resolved_by: Mapped[Optional[User]] = relationship(foreign_keys=[resolved_by_id])
+    vendor: Mapped[Optional[Company]] = relationship()
+
+
+# 同一台设备至多一条未完结的报修。与借还那条约束同理:靠数据库拦,
+# 不靠应用层「先查后写」—— 两个人同时报修同一台设备时才不会各建一条。
+Index(
+    "uq_open_repair_per_asset",
+    RepairRecord.asset_id,
+    unique=True,
+    sqlite_where=RepairRecord.resolved_at.is_(None),
+)
 
 
 class ActivityLog(Base):
