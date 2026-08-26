@@ -22,6 +22,11 @@
         <van-cell title="连续扫码">
           <template #right-icon><van-switch v-model="continuous" size="22" /></template>
         </van-cell>
+        <van-cell title="成套借用" :label="kitHint">
+          <template #right-icon>
+            <van-switch v-model="kitMode" size="22" :disabled="!continuous || inventoryMode" />
+          </template>
+        </van-cell>
         <van-cell title="盘库模式" :label="inventoryHint">
           <template #right-icon>
             <van-switch v-model="inventoryMode" size="22" :disabled="!continuous" />
@@ -56,11 +61,21 @@
           <van-button size="mini" plain type="danger" @click="scanned = []">清空</van-button>
         </div>
 
+        <div v-if="kitMode && borrowable.length" class="kitbar">
+          <van-button block round type="primary" :loading="borrowing" @click="borrowAll">
+            把这 {{ borrowable.length }} 件一起借出
+          </van-button>
+          <div class="muted kitbar__hint">
+            全有或全无:中间任何一件借不了就整批取消,不会借走一半。
+          </div>
+        </div>
+
         <van-cell-group inset>
           <van-cell v-for="item in scanned" :key="item.key" :border="true">
             <template #title>
               <span class="tag-mono">{{ item.tag }}</span>
               <van-tag v-if="item.state === 'checked'" type="success" style="margin-left: 6px">已盘</van-tag>
+              <van-tag v-else-if="item.state === 'borrowed'" type="primary" style="margin-left: 6px">已借出</van-tag>
               <van-tag v-else-if="item.state === 'pending'" type="warning" style="margin-left: 6px">处理中</van-tag>
               <van-tag v-else-if="item.state === 'error'" type="danger" style="margin-left: 6px">失败</van-tag>
             </template>
@@ -96,6 +111,7 @@ import {
   Switch as VanSwitch,
   Tag as VanTag,
   showFailToast,
+  showSuccessToast,
   showToast,
 } from 'vant'
 
@@ -123,6 +139,32 @@ const failCount = computed(() => scanned.value.filter((i) => i.state === 'error'
 const inventoryHint = computed(() =>
   continuous.value ? '扫到即记一条「确认无误」,对不上的点「有问题」再改' : '需要先打开连续扫码',
 )
+const kitHint = computed(() => {
+  if (!continuous.value) return '需要先打开连续扫码'
+  if (inventoryMode.value) return '盘库模式下不可用'
+  return '扫齐相机、镜头、电池,再一次性借出'
+})
+
+const kitMode = ref(false)
+const borrowing = ref(false)
+// 已扫到、还没借出去、且当前可借的
+const borrowable = computed(() =>
+  scanned.value.filter((i) => i.asset && !i.asset.is_checked_out && i.state !== 'borrowed'),
+)
+
+async function borrowAll() {
+  borrowing.value = true
+  try {
+    const items = borrowable.value
+    await api.checkoutKit({ asset_ids: items.map((i) => i.asset.id) })
+    items.forEach((i) => (i.state = 'borrowed'))
+    showSuccessToast(`已借出 ${items.length} 件`)
+  } catch (err) {
+    showFailToast(err instanceof ApiError ? err.detail : String(err))
+  } finally {
+    borrowing.value = false
+  }
+}
 
 async function onDecode(text) {
   if (continuous.value) {
@@ -214,5 +256,7 @@ function onFixed() {
   font-weight: 600;
 }
 .rowactions { display: flex; gap: 6px; align-items: center; }
+.kitbar { padding: 0 16px 12px; }
+.kitbar__hint { font-size: 12px; line-height: 1.6; margin-top: 8px; text-align: center; }
 .fail { color: #ee0a24; font-weight: normal; }
 </style>

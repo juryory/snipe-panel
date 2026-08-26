@@ -49,6 +49,9 @@
 
         <div class="filters__spacer"></div>
 
+        <el-button :disabled="!kitSelectable.length" type="primary" plain @click="openKit">
+          成套借出({{ kitSelectable.length }})
+        </el-button>
         <el-button :disabled="!selection.length" @click="exportSelected('csv')">
           导出编号 CSV({{ selection.length }})
         </el-button>
@@ -304,6 +307,40 @@
       </template>
     </el-drawer>
 
+    <!-- 成套借出 -->
+    <el-dialog v-model="kitVisible" title="成套借出" width="460px">
+      <el-alert
+        type="info"
+        :closable="false"
+        show-icon
+        title="全有或全无:中间任何一件借不了就整批取消,不会借走一半。"
+        style="margin-bottom: 12px"
+      />
+      <el-form label-width="96px">
+        <el-form-item label="设备">
+          <div class="kitlist">
+            <div v-for="row in kitSelectable" :key="row.id">
+              <span class="tag">{{ row.asset_tag }}</span> {{ row.name }}
+            </div>
+          </div>
+        </el-form-item>
+        <el-form-item label="领用人">
+          <el-select v-model="kitForm.user_id" filterable style="width: 100%">
+            <el-option v-for="u in users" :key="u.id" :label="displayName(u)" :value="u.id" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="预计归还">
+          <el-date-picker v-model="kitForm.due_at" type="datetime" style="width: 100%" placeholder="可留空" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="kitVisible = false">取消</el-button>
+        <el-button type="primary" :loading="saving" @click="doKit">
+          借出 {{ kitSelectable.length }} 件
+        </el-button>
+      </template>
+    </el-dialog>
+
     <ImportDialog v-model="importVisible" @done="reload(1)" />
 
     <CheckDialog v-model="checkVisible" :asset="checkAsset" @done="reload()" />
@@ -388,6 +425,38 @@ const qrAsset = ref(null)
 const qrSrc = computed(() => (qrAsset.value ? api.qrcodeUrl(qrAsset.value.id, 'png', 10) : ''))
 
 const importVisible = ref(false)
+
+const kitVisible = ref(false)
+const kitForm = reactive({ user_id: null, due_at: null })
+// 选中的里面真正能借的:已借出或维修中的排除掉
+const kitSelectable = computed(() =>
+  selection.value.filter((r) => !r.is_checked_out && !r.open_repair_id && r.status === 'in_stock'),
+)
+
+function openKit() {
+  kitForm.user_id = session.user ? session.user.id : null
+  kitForm.due_at = null
+  kitVisible.value = true
+}
+
+async function doKit() {
+  saving.value = true
+  try {
+    await api.checkoutKit({
+      asset_ids: kitSelectable.value.map((r) => r.id),
+      user_id: kitForm.user_id,
+      due_at: kitForm.due_at ? new Date(kitForm.due_at).toISOString() : null,
+    })
+    ElMessage.success(`已成套借出 ${kitSelectable.value.length} 件`)
+    kitVisible.value = false
+    await reload()
+  } catch (err) {
+    toast(err)
+    if (err.status === 409) await reload()
+  } finally {
+    saving.value = false
+  }
+}
 
 const checkVisible = ref(false)
 const checkAsset = ref(null)
@@ -648,4 +717,5 @@ onMounted(async () => {
 .qr__img { width: 200px; height: 200px; image-rendering: pixelated; }
 .qr__tag { font-size: 18px; font-weight: 600; margin: 8px 0; }
 .qr__note { font-size: 12px; text-align: left; line-height: 1.6; }
+.kitlist { max-height: 160px; overflow: auto; line-height: 1.8; }
 </style>

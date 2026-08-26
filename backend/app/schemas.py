@@ -336,6 +336,13 @@ class CheckoutIn(BaseModel):
     note: str = ""
 
 
+class KitCheckoutIn(BaseModel):
+    asset_ids: List[int] = Field(min_length=1, max_length=50)
+    user_id: Optional[int] = None  # 省略则为当前登录用户
+    due_at: Optional[datetime] = None
+    note: str = ""
+
+
 class CheckinIn(BaseModel):
     note: str = ""
 
@@ -354,4 +361,5 @@ class CheckoutRecordOut(BaseModel):
     due_at: Optional[UtcDatetime]
     checked_in_at: Optional[UtcDatetime]
     is_overdue: bool
+    kit_id: Optional[str]  # 同一次成套借出的记录共用
     note: str

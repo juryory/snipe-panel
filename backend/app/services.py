@@ -1,5 +1,6 @@
 """业务逻辑:资产编号生成、借出/归还、序列化。"""
 from typing import Dict, Iterable, List, Optional, Sequence
+from uuid import uuid4
 
 from fastapi import HTTPException, status
 from sqlalchemy import func, select, update
@@ -286,7 +287,7 @@ def is_overdue(record: CheckoutRecord) -> bool:
 
 
 def checkout(db: Session, asset: Asset, borrower: User, operator: User,
-             due_at=None, note: str = "") -> CheckoutRecord:
+             due_at=None, note: str = "", kit_id: Optional[str] = None) -> CheckoutRecord:
     """借出。
 
     PRD 3.5 并发控制:不做「先查后写」,直接插入并依赖
@@ -307,6 +308,7 @@ def checkout(db: Session, asset: Asset, borrower: User, operator: User,
         operator_id=operator.id,
         due_at=due_at,
         note=note,
+        kit_id=kit_id,
     )
     db.add(record)
     try:
@@ -320,6 +322,32 @@ def checkout(db: Session, asset: Asset, borrower: User, operator: User,
     log(db, operator.id, "checkout", "asset", asset.id,
         f"{asset.asset_tag} 借给 {borrower.real_name or borrower.username}")
     return record
+
+
+def checkout_kit(db: Session, assets: Sequence[Asset], borrower: User, operator: User,
+                 due_at=None, note: str = "") -> List[CheckoutRecord]:
+    """成套借出:相机 + 镜头 + 电池一起借,共用一个 kit_id。
+
+    全有或全无 —— 中间某台不可借就整批取消。借走三件、第四件失败的话,
+    人已经抱着东西走了,台账却只记了三条,对不上。
+
+    kit_id 只是把这几条记录串起来,不是新实体:借的仍然是一台台设备,
+    归还时也可以拆开单还(比如镜头先还、机身还在用)。
+    """
+    if not assets:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="没有选择设备")
+
+    kit_id = uuid4().hex[:16]
+    records = []
+    for asset in assets:
+        # 复用单台借出的全部校验:状态、在修、并发
+        records.append(
+            checkout(db, asset, borrower, operator, due_at=due_at, note=note, kit_id=kit_id)
+        )
+    log(db, operator.id, "checkout_kit", "asset", None,
+        f"{len(records)} 件借给 {borrower.real_name or borrower.username}:"
+        + "、".join(a.asset_tag for a in assets))
+    return records
 
 
 def checkin(db: Session, asset: Asset, operator: User, note: str = "") -> CheckoutRecord:
@@ -476,5 +504,6 @@ def record_out(record: CheckoutRecord) -> CheckoutRecordOut:
         due_at=record.due_at,
         checked_in_at=record.checked_in_at,
         is_overdue=is_overdue(record),
+        kit_id=record.kit_id,
         note=record.note,
     )
