@@ -29,7 +29,10 @@ async function request(path, { method = 'GET', body, params, raw = false } = {})
     })
   }
   const init = { method, credentials: 'same-origin', headers: {} }
-  if (body !== undefined) {
+  if (body instanceof FormData) {
+    // 不能自己设 Content-Type:multipart 的 boundary 要由浏览器生成
+    init.body = body
+  } else if (body !== undefined) {
     init.headers['Content-Type'] = 'application/json'
     init.body = JSON.stringify(body)
   }
@@ -105,6 +108,23 @@ export const api = {
     `/api/assets/${id}/qrcode?format=${format}&scale=${scale}`,
   exportQrcodes: (assetIds, fmt) =>
     request(`/api/assets/qrcodes/export?fmt=${fmt}`, { method: 'POST', body: assetIds, raw: true }),
+  importTemplateUrl: () => '/api/assets/import/template',
+  exportAssetsUrl: (params) => {
+    const url = new URL('/api/assets/export', window.location.origin)
+    Object.entries(params || {}).forEach(([k, v]) => {
+      if (v !== undefined && v !== null && v !== '') url.searchParams.set(k, v)
+    })
+    return url.pathname + url.search
+  },
+  importAssets: (file, { commit, createMissingCompanies }) => {
+    const form = new FormData()
+    form.append('file', file)
+    form.append('create_missing_companies', createMissingCompanies ? 'true' : 'false')
+    return request(commit ? '/api/assets/import' : '/api/assets/import/preview', {
+      method: 'POST',
+      body: form,
+    })
+  },
 
   listCompanies: () => request('/api/companies'),
   createCompany: (body) => request('/api/companies', { method: 'POST', body }),

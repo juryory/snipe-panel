@@ -261,6 +261,25 @@ class AssetOut(BaseModel):
     updated_at: UtcDatetime
 
 
+# ---------- 批量导入 ----------
+class ImportRowOut(BaseModel):
+    row: int  # Excel 里的行号,方便对着改
+    name: str
+    asset_tag: Optional[str]
+    category: str
+    ok: bool
+    errors: List[str]
+    warnings: List[str]
+
+
+class ImportPreview(BaseModel):
+    total: int
+    ok_count: int
+    error_count: int
+    committed: bool  # False = 只是预演,没写库
+    rows: List[ImportRowOut]
+
+
 # ---------- 借还 ----------
 class CheckoutIn(BaseModel):
     user_id: Optional[int] = None  # 省略则为当前登录用户(PRD 3.5)

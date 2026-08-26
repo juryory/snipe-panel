@@ -14,7 +14,16 @@ from .config import settings
 from .db import SessionLocal
 from .schema import ensure_schema
 from .models import Category, Role, User
-from .routers import assets, auth, categories, checkouts, companies, inventory, users
+from .routers import (
+    assets,
+    auth,
+    categories,
+    checkouts,
+    companies,
+    imports,
+    inventory,
+    users,
+)
 from .security import hash_password
 
 logger = logging.getLogger("snipe")
@@ -60,6 +69,9 @@ app = FastAPI(
 )
 
 app.include_router(auth.router)
+# imports 必须排在 assets 前面:它的 /api/assets/export、/api/assets/import
+# 会被 assets 的 /api/assets/{asset_id} 抢走(当成 id 去解析然后 422)
+app.include_router(imports.router)
 app.include_router(assets.router)
 app.include_router(categories.router)
 app.include_router(companies.router)

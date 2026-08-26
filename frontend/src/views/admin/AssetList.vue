@@ -53,6 +53,8 @@
           导出编号 CSV({{ selection.length }})
         </el-button>
         <el-button :disabled="!selection.length" @click="exportSelected('zip')">导出二维码</el-button>
+        <el-button @click="exportExcel">导出台账</el-button>
+        <el-button v-if="admin" @click="importVisible = true">批量导入</el-button>
         <el-button v-if="admin" type="primary" @click="openForm()">新增设备</el-button>
       </div>
     </el-card>
@@ -295,6 +297,8 @@
       </template>
     </el-drawer>
 
+    <ImportDialog v-model="importVisible" @done="reload(1)" />
+
     <CheckDialog v-model="checkVisible" :asset="checkAsset" @done="reload()" />
 
     <!-- 借出 -->
@@ -326,6 +330,7 @@ import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import CheckDialog from '../../components/CheckDialog.vue'
+import ImportDialog from '../../components/ImportDialog.vue'
 import { api, toast } from '../../api'
 import { useNarrow } from '../../useNarrow'
 import { displayStatus, fmtTime } from '../../format'
@@ -373,6 +378,8 @@ const editing = ref(false)
 const qrVisible = ref(false)
 const qrAsset = ref(null)
 const qrSrc = computed(() => (qrAsset.value ? api.qrcodeUrl(qrAsset.value.id, 'png', 10) : ''))
+
+const importVisible = ref(false)
 
 const checkVisible = ref(false)
 const checkAsset = ref(null)
@@ -566,6 +573,16 @@ async function doCheckin(row) {
     toast(err)
     if (err.status === 409) await reload()
   }
+}
+
+/** 导出当前筛选结果为 xlsx。表头与导入模板一致,改完能直接导回来。 */
+function exportExcel() {
+  window.location.href = api.exportAssetsUrl({
+    q: filters.q,
+    category_id: filters.category_id,
+    company_id: filters.company_id,
+    status: filters.status,
+  })
 }
 
 async function exportSelected(fmt) {
