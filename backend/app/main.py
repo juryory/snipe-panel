@@ -11,7 +11,8 @@ from fastapi.staticfiles import StaticFiles
 from sqlalchemy import select
 
 from .config import settings
-from .db import Base, SessionLocal, engine
+from .db import SessionLocal
+from .schema import ensure_schema
 from .models import Category, Role, User
 from .routers import assets, auth, categories, checkouts, companies, inventory, users
 from .security import hash_password
@@ -28,8 +29,8 @@ DEFAULT_CATEGORIES = [
 
 
 def bootstrap() -> None:
-    """建表 + 首次运行时写入初始管理员与默认分类。"""
-    Base.metadata.create_all(engine)
+    """升级库结构 + 首次运行时写入初始管理员与默认分类。"""
+    ensure_schema()
     with SessionLocal() as db:
         has_user = db.execute(select(User.id).limit(1)).first()
         if not has_user:

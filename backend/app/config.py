@@ -28,6 +28,9 @@ class Settings(BaseSettings):
     # 扫码查询限流(PRD 3.2:防止按编号规律枚举全量台账)
     by_tag_limit_per_minute: int = 60
 
+    # 库结构:置 0 时退回 create_all(仅测试用,见 app/schema.py)
+    run_migrations: bool = True
+
     # 资产编号
     tag_seq_width: int = 4
 

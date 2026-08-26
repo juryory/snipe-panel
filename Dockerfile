@@ -18,6 +18,9 @@ COPY backend/requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY backend/app ./app
+# 迁移脚本必须一起进镜像:容器启动时会跑 alembic upgrade head
+COPY backend/alembic ./alembic
+COPY backend/alembic.ini ./alembic.ini
 COPY --from=frontend /build/dist ./frontend/dist
 
 VOLUME ["/data"]

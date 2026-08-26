@@ -205,11 +205,7 @@
           <el-input v-model="form.model" />
         </el-form-item>
         <el-form-item label="序列号">
-          <ScanInput
-            v-model="form.serial_no"
-            placeholder="可手输,或点右侧扫设备上的 SN 条码"
-            title="扫序列号"
-          />
+          <el-input v-model="form.serial_no" placeholder="设备铭牌上的 SN" />
         </el-form-item>
         <el-form-item label="存放位置">
           <el-input v-model="form.location" />
@@ -330,7 +326,6 @@ import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import CheckDialog from '../../components/CheckDialog.vue'
-import ScanInput from '../../components/ScanInput.vue'
 import { api, toast } from '../../api'
 import { useNarrow } from '../../useNarrow'
 import { displayStatus, fmtTime } from '../../format'

@@ -9,6 +9,8 @@ _TMP = Path(tempfile.mkdtemp(prefix="snipe-test-"))
 os.environ["SNIPE_DB_PATH"] = str(_TMP / "test.db")
 os.environ["SNIPE_SECRET_KEY"] = "test-secret"
 os.environ["SNIPE_INITIAL_ADMIN_PASSWORD"] = "admin12345"
+# 每个用例都重建库,跑迁移纯属浪费;迁移本身由 test_migrations.py 单独验证
+os.environ["SNIPE_RUN_MIGRATIONS"] = "0"
 
 from fastapi.testclient import TestClient  # noqa: E402
 

@@ -46,7 +46,7 @@
       <van-cell-group inset class="block">
         <van-field v-model="form.brand" label="品牌" placeholder="如 Lenovo" />
         <van-field v-model="form.model" label="型号" placeholder="如 Gen11" />
-        <ScanField v-model="form.serial_no" />
+        <van-field v-model="form.serial_no" label="序列号" placeholder="设备铭牌上的 SN" />
         <van-field v-model="form.location" label="存放位置" placeholder="如 库房 A" />
       </van-cell-group>
 
@@ -134,7 +134,6 @@ import {
 } from 'vant'
 
 import PickerField from '../components/PickerField.vue'
-import ScanField from '../components/ScanField.vue'
 import { api, ApiError } from '../../api'
 import { displayName, markAssetsDirty } from '../../store'
 
