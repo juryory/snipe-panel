@@ -103,6 +103,39 @@ class CategoryUpdate(BaseModel):
     name: Optional[str] = Field(default=None, min_length=1, max_length=64)
 
 
+# ---------- 采购公司 ----------
+class CompanyBrief(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+
+
+class CompanyOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    name: str
+    contact: str
+    phone: str
+    note: str
+    asset_count: int = 0
+
+
+class CompanyCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=128)
+    contact: str = ""
+    phone: str = Field(default="", max_length=32)
+    note: str = ""
+
+
+class CompanyUpdate(BaseModel):
+    name: Optional[str] = Field(default=None, min_length=1, max_length=128)
+    contact: Optional[str] = None
+    phone: Optional[str] = Field(default=None, max_length=32)
+    note: Optional[str] = None
+
+
 # ---------- 设备 ----------
 class AssetBase(BaseModel):
     name: str = Field(min_length=1, max_length=128)
@@ -112,6 +145,7 @@ class AssetBase(BaseModel):
     location: str = ""
     owner_user_id: Optional[int] = None
     purchased_at: Optional[date] = None
+    company_id: Optional[int] = None
     note: str = ""
 
 
@@ -136,6 +170,7 @@ class AssetUpdate(BaseModel):
     location: Optional[str] = None
     owner_user_id: Optional[int] = None
     purchased_at: Optional[date] = None
+    company_id: Optional[int] = None
     note: Optional[str] = None
 
 
@@ -165,6 +200,7 @@ class AssetOut(BaseModel):
     location: str
     owner: Optional[UserBrief]
     purchased_at: Optional[date]
+    company: Optional[CompanyBrief]
     note: str
     photo_url: Optional[str]
     # PRD 3.5:借出为派生状态

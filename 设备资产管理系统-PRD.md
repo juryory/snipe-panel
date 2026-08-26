@@ -1,7 +1,9 @@
 # 公司设备资产管理系统 · 产品需求文档(PRD)
 
-版本 v0.2 · 2026-08-26
+版本 v0.3 · 2026-08-26
 
+> v0.3 变更:新增「采购公司」实体与管理页面,设备可关联采购来源。
+>
 > v0.2 变更:明确二维码「防外部读取」的设计意图与安全边界;登录方式确定为用户名密码(不接 SSO / 扫码登录);客户端第一阶段只做网页应用(桌面后台 + 移动网页);技术选型收敛为单一方案。
 
 ---
@@ -38,10 +40,19 @@ MVP 只做「管理员 + 普通用户」两级,后续再细分。
 ## 3. 功能需求
 
 ### 3.1 设备录入与管理
-- 字段:资产编号(自动)、名称、分类、品牌/型号、序列号(SN)、状态、存放位置、责任人、采购日期、备注、照片(可选)
+- 字段:资产编号(自动)、名称、分类、品牌/型号、序列号(SN)、状态、存放位置、责任人、**采购公司**、采购日期、备注、照片(可选)
 - 分类可自定义(如 电脑 / 相机 / 镜头 / 直播设备 / 外设)
 - 支持编辑、停用 / 报废、删除(软删除,保留历史)
 - Excel 批量导入 / 导出(阶段二)
+
+**采购公司**
+
+- 独立实体,可增删改;字段:公司名称(唯一)、联系人、联系电话、备注
+- 设备可关联一家采购公司,**可留空**(历史遗留设备往往没有采购记录)
+- 管理页面可查看某公司名下的全部设备
+- **名下还有设备时不允许删除公司**(含已软删除的设备)。设备上的采购来源是历史
+  事实,不能因为删掉公司记录就凭空消失;要删先把这些设备的采购公司改掉或清空
+- 用途:设备报修/保修时能立刻查到从哪家买的、找谁
 
 **责任人与借用人的区别(重要)**
 
@@ -177,12 +188,15 @@ MVP 只做「管理员 + 普通用户」两级,后续再细分。
 | status | enum | 在库 / 维修 / 报废(**不含「借出」,借出为派生状态**) |
 | location | string | 存放位置 |
 | owner_user_id | FK, null | 长期责任人(借还流程不修改) |
+| company_id | FK, null | 采购公司,可空 |
 | purchased_at | date, null | 采购日期 |
 | note | text | 备注 |
 | photo_url | string, null | 照片 |
 | created_at / updated_at / deleted_at | datetime | 软删除 |
 
 **categories(分类)**:`id, name, tag_prefix(编号前缀, unique), seq(当前流水号)`
+
+**companies(采购公司)**:`id, name(unique), contact, phone, note, created_at`
 
 **users(用户)**:`id, username(unique), password_hash, real_name, role, department, must_change_password, failed_attempts, locked_until`
 
@@ -201,7 +215,7 @@ MVP 只做「管理员 + 普通用户」两级,后续再细分。
 | POST | `/api/auth/logout` | 登出 |
 | GET | `/api/auth/me` | 当前用户 |
 | POST | `/api/auth/change-password` | 改密(首次登录强制) |
-| GET | `/api/assets` | 列表(分页 / 搜索 / 筛选) |
+| GET | `/api/assets` | 列表(分页 / 搜索 / 按分类、采购公司、状态筛选) |
 | POST | `/api/assets` | 新增(返回自动生成的 asset_tag) |
 | GET | `/api/assets/{id}` | 详情 |
 | PUT | `/api/assets/{id}` | 编辑 |
@@ -215,6 +229,7 @@ MVP 只做「管理员 + 普通用户」两级,后续再细分。
 | GET | `/api/checkouts?overdue=1` | 逾期列表 |
 | GET | `/api/me/assets` | 我名下的设备 |
 | GET | `/api/categories` `POST` `PUT` `DELETE` | 分类管理 |
+| GET | `/api/companies` `POST` `PUT` `DELETE` | 采购公司管理 |
 | GET | `/api/users` `POST` `PUT` | 用户管理 |
 | GET | `/api/dashboard/summary` | 看板统计(阶段二) |
 

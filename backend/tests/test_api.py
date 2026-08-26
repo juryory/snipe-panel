@@ -387,3 +387,137 @@ def test_category_in_use_cannot_be_deleted(admin):
     _make_asset(admin)
     r = admin.delete(f"/api/categories/{cat['id']}")
     assert r.status_code == 409
+
+
+# ---------- 采购公司 ----------
+def _new_company(admin, name="星光影视器材", **kw):
+    body = {"name": name, **kw}
+    r = admin.post("/api/companies", json=body)
+    assert r.status_code == 201, r.text
+    return r.json()
+
+
+def test_company_crud(admin):
+    company = _new_company(admin, "星光影视器材", contact="王经理", phone="13800000000")
+    assert company["name"] == "星光影视器材"
+    assert company["contact"] == "王经理"
+    assert company["asset_count"] == 0
+
+    r = admin.put(f"/api/companies/{company['id']}", json={"contact": "李经理"})
+    assert r.status_code == 200
+    assert r.json()["contact"] == "李经理"
+
+    assert admin.delete(f"/api/companies/{company['id']}").status_code == 200
+    assert admin.get("/api/companies").json() == []
+
+
+def test_company_name_must_be_unique(admin):
+    _new_company(admin, "星光影视器材")
+    r = admin.post("/api/companies", json={"name": "星光影视器材"})
+    assert r.status_code == 409
+
+
+def test_asset_carries_purchasing_company(admin):
+    company = _new_company(admin)
+    cat = _first_category(admin)
+    r = admin.post(
+        "/api/assets",
+        json={"name": "Sony A7M4", "category_id": cat["id"], "company_id": company["id"]},
+    )
+    assert r.status_code == 201, r.text
+    assert r.json()["company"]["name"] == "星光影视器材"
+
+    # 台账列表也要带上,否则列表页显示不出采购公司
+    listed = admin.get("/api/assets").json()["items"][0]
+    assert listed["company"]["id"] == company["id"]
+
+
+def test_asset_company_can_be_cleared_and_changed(admin):
+    a = _new_company(admin, "甲公司")
+    b = _new_company(admin, "乙公司")
+    cat = _first_category(admin)
+    asset = admin.post(
+        "/api/assets", json={"name": "灯", "category_id": cat["id"], "company_id": a["id"]}
+    ).json()
+
+    r = admin.put(f"/api/assets/{asset['id']}", json={"company_id": b["id"]})
+    assert r.json()["company"]["name"] == "乙公司"
+
+    r = admin.put(f"/api/assets/{asset['id']}", json={"company_id": None})
+    assert r.json()["company"] is None
+
+
+def test_unknown_company_is_rejected(admin):
+    cat = _first_category(admin)
+    r = admin.post(
+        "/api/assets", json={"name": "x", "category_id": cat["id"], "company_id": 999}
+    )
+    assert r.status_code == 400
+    assert "采购公司不存在" in r.json()["detail"]
+
+
+def test_company_asset_count_and_filter(admin):
+    company = _new_company(admin)
+    other = _new_company(admin, "别家")
+    cat = _first_category(admin)
+    for name in ["设备一", "设备二"]:
+        admin.post(
+            "/api/assets",
+            json={"name": name, "category_id": cat["id"], "company_id": company["id"]},
+        )
+    admin.post("/api/assets", json={"name": "设备三", "category_id": cat["id"], "company_id": other["id"]})
+
+    rows = {c["name"]: c["asset_count"] for c in admin.get("/api/companies").json()}
+    assert rows["星光影视器材"] == 2
+    assert rows["别家"] == 1
+
+    # 公司详情页要靠这个筛选列出名下设备
+    filtered = admin.get("/api/assets", params={"company_id": company["id"]}).json()
+    assert filtered["total"] == 2
+    assert {a["name"] for a in filtered["items"]} == {"设备一", "设备二"}
+
+
+def test_company_with_assets_cannot_be_deleted(admin):
+    company = _new_company(admin)
+    cat = _first_category(admin)
+    admin.post(
+        "/api/assets", json={"name": "设备", "category_id": cat["id"], "company_id": company["id"]}
+    )
+    r = admin.delete(f"/api/companies/{company['id']}")
+    assert r.status_code == 409
+    assert "1 台设备" in r.json()["detail"]
+
+
+def test_soft_deleted_asset_still_blocks_company_deletion(admin):
+    """软删除的设备不计入在册台数,但仍持有外键,所以公司还是删不掉。
+
+    只数在册设备会放行删除,然后在 DELETE 时撞上 FOREIGN KEY 约束。
+    """
+    company = _new_company(admin)
+    cat = _first_category(admin)
+    asset = admin.post(
+        "/api/assets", json={"name": "设备", "category_id": cat["id"], "company_id": company["id"]}
+    ).json()
+    admin.delete(f"/api/assets/{asset['id']}")
+
+    assert admin.get("/api/companies").json()[0]["asset_count"] == 0
+    r = admin.delete(f"/api/companies/{company['id']}")
+    assert r.status_code == 409
+    assert "已删除" in r.json()["detail"]
+
+
+def test_soft_deleted_asset_still_blocks_category_deletion(admin):
+    """分类有同样的隐患。"""
+    cat = _first_category(admin)
+    asset = _make_asset(admin)
+    admin.delete(f"/api/assets/{asset['id']}")
+    r = admin.delete(f"/api/categories/{cat['id']}")
+    assert r.status_code == 409
+
+
+def test_regular_user_can_read_but_not_manage_companies(admin):
+    _new_company(admin)
+    _new_user(admin, "alice")
+    alice = _activate("alice")
+    assert alice.get("/api/companies").status_code == 200
+    assert alice.post("/api/companies", json={"name": "自己开的"}).status_code == 403

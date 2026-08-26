@@ -13,7 +13,7 @@ from sqlalchemy import select
 from .config import settings
 from .db import Base, SessionLocal, engine
 from .models import Category, Role, User
-from .routers import assets, auth, categories, checkouts, users
+from .routers import assets, auth, categories, checkouts, companies, users
 from .security import hash_password
 
 logger = logging.getLogger("snipe")
@@ -61,6 +61,7 @@ app = FastAPI(
 app.include_router(auth.router)
 app.include_router(assets.router)
 app.include_router(categories.router)
+app.include_router(companies.router)
 app.include_router(checkouts.router)
 app.include_router(users.router)
 

@@ -19,6 +19,7 @@ from ..models import (
     AssetStatus,
     Category,
     CheckoutRecord,
+    Company,
     Role,
     User,
     to_naive_utc,
@@ -51,7 +52,11 @@ def _base_query():
     return (
         select(Asset)
         .where(Asset.deleted_at.is_(None))
-        .options(joinedload(Asset.category), joinedload(Asset.owner))
+        .options(
+            joinedload(Asset.category),
+            joinedload(Asset.owner),
+            joinedload(Asset.company),
+        )
     )
 
 
@@ -92,6 +97,7 @@ def _make_qr(tag: str):
 def list_assets(
     q: Optional[str] = Query(None, description="搜索:编号 / 名称 / SN / 责任人"),
     category_id: Optional[int] = None,
+    company_id: Optional[int] = Query(None, description="按采购公司筛选"),
     status_: Optional[AssetStatus] = Query(None, alias="status"),
     location: Optional[str] = None,
     checked_out: Optional[bool] = Query(None, description="是否借出中"),
@@ -114,6 +120,8 @@ def list_assets(
         )
     if category_id is not None:
         stmt = stmt.where(Asset.category_id == category_id)
+    if company_id is not None:
+        stmt = stmt.where(Asset.company_id == company_id)
     if status_ is not None:
         stmt = stmt.where(Asset.status == status_)
     if location:
@@ -150,6 +158,8 @@ def create_asset(
     category = db.get(Category, payload.category_id)
     if category is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="分类不存在")
+    if payload.company_id is not None and db.get(Company, payload.company_id) is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="采购公司不存在")
     fields = payload.model_dump(exclude={"category_id", "asset_tag"})
     tag = payload.asset_tag.strip().upper() if payload.asset_tag else None
     asset = create_asset_with_tag(db, category, tag, **fields)
@@ -253,6 +263,9 @@ def update_asset(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="设备借出中,请先办理归还再修改状态",
             )
+    if data.get("company_id") is not None and data["company_id"] != asset.company_id:
+        if db.get(Company, data["company_id"]) is None:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="采购公司不存在")
     if "category_id" in data and data["category_id"] != asset.category_id:
         if db.get(Category, data["category_id"]) is None:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="分类不存在")
@@ -262,6 +275,10 @@ def update_asset(
         setattr(asset, key, value)
     log(db, admin.id, "asset_update", "asset", asset.id, ",".join(data.keys()))
     db.commit()
+    # Session 是 expire_on_commit=False,提交后对象上已加载的关系不会失效。
+    # 改了 category_id / company_id 后若不显式过期,下面的 joinedload 会命中
+    # identity map 里的旧对象,返回改动前的分类名和采购公司。
+    db.expire(asset)
     refreshed = _get_asset(db, asset_id)
     return asset_out(refreshed, open_checkouts_for(db, [asset_id]).get(asset_id))
 

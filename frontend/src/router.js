@@ -22,6 +22,7 @@ const routes = [
   { path: '/admin', redirect: '/admin/assets' },
   { path: '/admin/assets', name: 'admin-assets', component: () => import('./views/admin/AssetList.vue') },
   { path: '/admin/categories', name: 'admin-categories', component: () => import('./views/admin/Categories.vue'), meta: { admin: true } },
+  { path: '/admin/companies', name: 'admin-companies', component: () => import('./views/admin/Companies.vue') },
   { path: '/admin/users', name: 'admin-users', component: () => import('./views/admin/Users.vue'), meta: { admin: true } },
   { path: '/admin/checkouts', name: 'admin-checkouts', component: () => import('./views/admin/Checkouts.vue') },
 

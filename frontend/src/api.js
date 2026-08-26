@@ -93,6 +93,11 @@ export const api = {
   exportQrcodes: (assetIds, fmt) =>
     request(`/api/assets/qrcodes/export?fmt=${fmt}`, { method: 'POST', body: assetIds, raw: true }),
 
+  listCompanies: () => request('/api/companies'),
+  createCompany: (body) => request('/api/companies', { method: 'POST', body }),
+  updateCompany: (id, body) => request(`/api/companies/${id}`, { method: 'PUT', body }),
+  deleteCompany: (id) => request(`/api/companies/${id}`, { method: 'DELETE' }),
+
   listCategories: () => request('/api/categories'),
   createCategory: (body) => request('/api/categories', { method: 'POST', body }),
   updateCategory: (id, body) => request(`/api/categories/${id}`, { method: 'PUT', body }),

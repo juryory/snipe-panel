@@ -27,6 +27,9 @@
           </el-descriptions-item>
           <el-descriptions-item label="序列号">{{ asset.serial_no || '—' }}</el-descriptions-item>
           <el-descriptions-item label="存放位置">{{ asset.location || '—' }}</el-descriptions-item>
+          <el-descriptions-item label="采购公司">
+            {{ asset.company ? asset.company.name : '—' }}
+          </el-descriptions-item>
           <el-descriptions-item label="长期责任人">
             {{ asset.owner ? displayName(asset.owner) : '—' }}
           </el-descriptions-item>

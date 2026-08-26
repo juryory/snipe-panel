@@ -13,6 +13,9 @@
         <el-select v-model="filters.category_id" placeholder="全部分类" clearable style="width: 140px" @change="reload(1)">
           <el-option v-for="c in categories" :key="c.id" :label="c.name" :value="c.id" />
         </el-select>
+        <el-select v-model="filters.company_id" placeholder="全部采购公司" clearable filterable style="width: 170px" @change="reload(1)">
+          <el-option v-for="c in companies" :key="c.id" :label="c.name" :value="c.id" />
+        </el-select>
         <el-select v-model="filters.status" placeholder="全部状态" clearable style="width: 130px" @change="reload(1)">
           <el-option label="在库" value="in_stock" />
           <el-option label="维修" value="repair" />
@@ -51,6 +54,9 @@
           <template #default="{ row }">{{ [row.brand, row.model].filter(Boolean).join(' ') || '—' }}</template>
         </el-table-column>
         <el-table-column prop="serial_no" label="序列号" min-width="140" show-overflow-tooltip />
+        <el-table-column label="采购公司" min-width="150" show-overflow-tooltip>
+          <template #default="{ row }">{{ row.company ? row.company.name : '—' }}</template>
+        </el-table-column>
         <el-table-column label="状态" width="100">
           <template #default="{ row }">
             <el-tag :type="displayStatus(row).type" size="small">{{ displayStatus(row).label }}</el-tag>
@@ -133,6 +139,11 @@
           </el-select>
           <div class="muted hint">「借出」不是设备状态,由借还记录决定,这里选不到。</div>
         </el-form-item>
+        <el-form-item label="采购公司">
+          <el-select v-model="form.company_id" clearable filterable placeholder="不指定" style="width: 100%">
+            <el-option v-for="c in companies" :key="c.id" :label="c.name" :value="c.id" />
+          </el-select>
+        </el-form-item>
         <el-form-item label="采购日期">
           <el-date-picker v-model="form.purchased_at" type="date" value-format="YYYY-MM-DD" style="width: 100%" />
         </el-form-item>
@@ -184,6 +195,7 @@
 
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
+import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import { api, toast } from '../../api'
@@ -191,6 +203,7 @@ import { displayStatus } from '../../format'
 import { displayName, isAdmin, session } from '../../store'
 
 const admin = isAdmin()
+const route = useRoute()
 
 const rows = ref([])
 const categories = ref([])
@@ -202,7 +215,8 @@ const pageSize = ref(20)
 const loading = ref(false)
 const saving = ref(false)
 
-const filters = reactive({ q: '', category_id: null, status: null, checked_out: null })
+const companies = ref([])
+const filters = reactive({ q: '', category_id: null, company_id: null, status: null, checked_out: null })
 
 const emptyForm = () => ({
   id: null,
@@ -214,6 +228,7 @@ const emptyForm = () => ({
   serial_no: '',
   location: '',
   owner_user_id: null,
+  company_id: null,
   status: 'in_stock',
   purchased_at: null,
   note: '',
@@ -237,6 +252,7 @@ async function reload(toPage) {
     const data = await api.listAssets({
       q: filters.q,
       category_id: filters.category_id,
+      company_id: filters.company_id,
       status: filters.status,
       checked_out: filters.checked_out,
       page: page.value,
@@ -265,6 +281,7 @@ function openForm(row) {
       serial_no: row.serial_no,
       location: row.location,
       owner_user_id: row.owner ? row.owner.id : null,
+      company_id: row.company ? row.company.id : null,
       status: row.status,
       purchased_at: row.purchased_at,
       note: row.note,
@@ -385,10 +402,17 @@ async function exportSelected(fmt) {
 
 onMounted(async () => {
   try {
-    ;[categories.value, users.value] = await Promise.all([api.listCategories(), api.listUsers('')])
+    ;[categories.value, users.value, companies.value] = await Promise.all([
+      api.listCategories(),
+      api.listUsers(''),
+      api.listCompanies(),
+    ])
   } catch (err) {
     toast(err)
   }
+  // 从采购公司页点「N 台」跳过来时带着 company_id,直接按该公司筛选
+  const fromQuery = Number(route.query.company_id)
+  if (fromQuery) filters.company_id = fromQuery
   await reload(1)
 })
 </script>

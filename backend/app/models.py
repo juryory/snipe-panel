@@ -96,6 +96,19 @@ class Category(Base):
     assets: Mapped[List["Asset"]] = relationship(back_populates="category")
 
 
+class Company(Base):
+    """采购公司(供应商)。"""
+
+    __tablename__ = "companies"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(128), unique=True)
+    contact: Mapped[str] = mapped_column(String(64), default="")
+    phone: Mapped[str] = mapped_column(String(32), default="")
+    note: Mapped[str] = mapped_column(Text, default="")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+
 class Asset(Base):
     __tablename__ = "assets"
 
@@ -112,6 +125,8 @@ class Asset(Base):
     # PRD 3.1:长期责任人,借还流程不修改此字段
     owner_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
     purchased_at: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    # 采购公司。设备可能是历史遗留、没有采购记录,故可空
+    company_id: Mapped[Optional[int]] = mapped_column(ForeignKey("companies.id"), nullable=True)
     note: Mapped[str] = mapped_column(Text, default="")
     photo_url: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
 
@@ -121,6 +136,7 @@ class Asset(Base):
 
     category: Mapped[Category] = relationship(back_populates="assets")
     owner: Mapped[Optional[User]] = relationship(foreign_keys=[owner_user_id])
+    company: Mapped[Optional[Company]] = relationship()
 
 
 class CheckoutRecord(Base):

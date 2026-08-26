@@ -17,7 +17,7 @@ from .models import (
     User,
     utcnow,
 )
-from .schemas import AssetOut, CheckoutBrief, CheckoutRecordOut, UserBrief
+from .schemas import AssetOut, CheckoutBrief, CheckoutRecordOut, CompanyBrief, UserBrief
 
 
 # ---------- 操作日志 ----------
@@ -174,6 +174,7 @@ def asset_out(asset: Asset, open_record: Optional[CheckoutRecord]) -> AssetOut:
         location=asset.location,
         owner=_brief(asset.owner),
         purchased_at=asset.purchased_at,
+        company=CompanyBrief.model_validate(asset.company) if asset.company else None,
         note=asset.note,
         photo_url=asset.photo_url,
         is_checked_out=open_record is not None,

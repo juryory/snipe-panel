@@ -75,15 +75,21 @@ def delete_category(
     category = db.get(Category, category_id)
     if category is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="分类不存在")
-    in_use = db.execute(
-        select(func.count())
-        .select_from(Asset)
-        .where(Asset.category_id == category_id, Asset.deleted_at.is_(None))
-    ).scalar_one()
-    if in_use:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail=f"该分类下还有 {in_use} 台设备,不可删除"
-        )
+    # 与采购公司同理:软删除的设备行仍持有 category_id 外键,不算进来的话
+    # 这里会放行,再在 DELETE 时撞上 FOREIGN KEY 约束。
+    live, archived = db.execute(
+        select(
+            func.count().filter(Asset.deleted_at.is_(None)),
+            func.count().filter(Asset.deleted_at.is_not(None)),
+        ).where(Asset.category_id == category_id)
+    ).one()
+    if live or archived:
+        detail = f"该分类下还有 {live} 台设备,不可删除"
+        if archived and not live:
+            detail = f"该分类下有 {archived} 台已删除的设备仍保留着分类,不可删除"
+        elif archived:
+            detail += f"(另有 {archived} 台已删除的设备)"
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=detail)
     log(db, admin.id, "category_delete", "category", category.id, category.name)
     db.delete(category)
     db.commit()
