@@ -8,7 +8,16 @@
       <strong>{{ inventoryMode ? '盘库' : '扫码' }}</strong>
       <div>
         <el-button link @click="$router.push('/m/mine')">我的设备</el-button>
-        <el-button v-if="admin" link @click="$router.push('/admin/assets')">后台</el-button>
+        <el-dropdown @command="onAccount">
+          <el-button link type="primary">{{ myName }} ▾</el-button>
+          <template #dropdown>
+            <el-dropdown-menu>
+              <el-dropdown-item v-if="admin" command="admin">后台管理</el-dropdown-item>
+              <el-dropdown-item command="password">修改密码</el-dropdown-item>
+              <el-dropdown-item command="logout" divided>退出登录</el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
       </div>
     </div>
 
@@ -94,10 +103,11 @@ import { ElMessage } from 'element-plus'
 import CheckDialog from '../../components/CheckDialog.vue'
 import QrScanner from '../../components/QrScanner.vue'
 import { api, toast } from '../../api'
-import { isAdmin } from '../../store'
+import { displayName, isAdmin, session } from '../../store'
 
 const router = useRouter()
 const admin = isAdmin()
+const myName = computed(() => displayName(session.user))
 
 const scanner = ref(null)
 const cameraError = ref('')
@@ -184,6 +194,25 @@ async function onManual() {
   } finally {
     looking.value = false
   }
+}
+
+/** 移动端此前没有任何退出入口 —— 普通用户看不到后台的导航栏,只能清缓存。 */
+async function onAccount(command) {
+  if (command === 'admin') {
+    router.push('/admin/assets')
+    return
+  }
+  if (command === 'password') {
+    router.push({ name: 'change-password' })
+    return
+  }
+  try {
+    await api.logout()
+  } catch (err) {
+    toast(err)
+  }
+  session.user = null
+  router.replace({ name: 'login' })
 }
 
 function openFix(item) {

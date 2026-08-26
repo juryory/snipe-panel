@@ -85,13 +85,14 @@
             <el-tag v-else type="info" size="small">从未盘库</el-tag>
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="290" fixed="right">
+        <el-table-column label="操作" width="330" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" @click="showQr(row)">二维码</el-button>
             <el-button link type="warning" @click="openCheck(row)">盘库</el-button>
             <el-button v-if="!row.is_checked_out" link type="primary" @click="openCheckout(row)">借出</el-button>
             <el-button v-else link type="success" @click="doCheckin(row)">归还</el-button>
             <el-button v-if="admin" link type="primary" @click="openForm(row)">编辑</el-button>
+            <el-button v-if="admin" link type="primary" @click="duplicate(row)">复制</el-button>
             <el-button v-if="admin" link type="danger" @click="remove(row)">删除</el-button>
           </template>
         </el-table-column>
@@ -135,7 +136,11 @@
           <el-input v-model="form.model" />
         </el-form-item>
         <el-form-item label="序列号">
-          <el-input v-model="form.serial_no" />
+          <ScanInput
+            v-model="form.serial_no"
+            placeholder="可手输,或点右侧扫设备上的 SN 条码"
+            title="扫序列号"
+          />
         </el-form-item>
         <el-form-item label="存放位置">
           <el-input v-model="form.location" />
@@ -216,6 +221,7 @@ import { useRoute } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 import CheckDialog from '../../components/CheckDialog.vue'
+import ScanInput from '../../components/ScanInput.vue'
 import { api, toast } from '../../api'
 import { displayStatus, fmtTime } from '../../format'
 import { displayName, isAdmin, session } from '../../store'
@@ -312,6 +318,21 @@ function openForm(row) {
     })
   }
   formVisible.value = true
+}
+
+/**
+ * 复制设备:把这台的字段带进新增表单,资产编号留空(保存时按分类前缀自动递增)。
+ *
+ * 序列号故意不带过来 —— SN 是这台实物独有的,复制过去会造出两台 SN 相同的设备,
+ * 报修和保修时就分不清是哪台了。所以清空并让它成为唯一需要填的字段。
+ */
+function duplicate(row) {
+  openForm(row)
+  editing.value = false
+  form.id = null
+  form.asset_tag = ''
+  form.serial_no = ''
+  ElMessage.info('已复制字段,填好序列号后保存即可;资产编号会自动生成')
 }
 
 async function save() {
