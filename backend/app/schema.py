@@ -4,6 +4,7 @@
 加列** —— 一旦线上录了真实数据,再改模型就只能手写 ALTER 或者删库重来。
 """
 import logging
+import sys
 
 from sqlalchemy import inspect
 
@@ -51,4 +52,17 @@ def ensure_schema() -> None:
         logger.warning("检测到未纳入迁移管理的旧库,按基线 %s 标记后再升级", base)
         command.stamp(cfg, base)
 
-    command.upgrade(cfg, "head")
+    try:
+        command.upgrade(cfg, "head")
+    except Exception:
+        # 直接往 stderr 打一份。alembic 加载 env.py 时会重配 logging,
+        # 异常靠 logger 往上抛有被吞掉的风险,而迁移失败是必须让人看见的事 ——
+        # 看不见的话表现就是容器不停重启、日志里却只有 INFO。
+        import traceback
+
+        print("=" * 60, file=sys.stderr)
+        print("数据库迁移失败,应用无法启动:", file=sys.stderr)
+        traceback.print_exc(file=sys.stderr)
+        print("=" * 60, file=sys.stderr)
+        sys.stderr.flush()
+        raise

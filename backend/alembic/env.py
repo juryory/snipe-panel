@@ -18,7 +18,10 @@ from app import models  # noqa: F401
 
 config = context.config
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # disable_existing_loggers 默认是 True,会把 uvicorn 已经建好的 logger 全部关掉。
+    # 后果是迁移一旦出错,"Application startup failed" 和整个 traceback 都被吞掉,
+    # 容器日志里只剩一串 INFO —— 看起来像进程无声无息地死了,极难排查。
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 target_metadata = Base.metadata
 
