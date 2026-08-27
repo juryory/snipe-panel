@@ -15,7 +15,6 @@ from .. import ratelimit
 from ..config import settings
 from ..db import get_db
 from ..deps import active_user, admin_user
-from ..labels import estimate_width_mm, render_svg
 from ..models import (
     Asset,
     AssetStatus,
@@ -206,13 +205,8 @@ def get_by_tag(tag: str, db: Session = Depends(get_db), user: User = Depends(act
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="查询过于频繁,请稍后再试",
         )
-    key = tag.strip().upper()
-    # 扫到的可能是条码里的 6 位数字,也可能是人手输的资产编号 —— 两种都认。
-    # 标签上印的是 PC-0001,条码里编的是 060001,员工不该关心这个区别。
     asset = (
-        db.execute(
-            _base_query().where(or_(Asset.asset_tag == key, Asset.barcode == key))
-        )
+        db.execute(_base_query().where(Asset.asset_tag == tag.strip().upper()))
         .scalars()
         .first()
     )
@@ -246,12 +240,9 @@ def export_qrcodes(
     if fmt == "csv":
         buf = io.StringIO()
         writer = csv.writer(buf)
-        # 条码号单独一列:精臣云打印按这一列生成 Code 128,资产编号那列印成文字
-        writer.writerow(["条码号", "资产编号", "设备名称", "分类"])
+        writer.writerow(["资产编号", "设备名称", "分类"])
         for a in rows:
-            writer.writerow(
-                [a.barcode or "", a.asset_tag, a.name, a.category.name if a.category else ""]
-            )
+            writer.writerow([a.asset_tag, a.name, a.category.name if a.category else ""])
         # 前置 BOM,Excel 才会按 UTF-8 解析中文
         data = ("﻿" + buf.getvalue()).encode("utf-8")
         return Response(
@@ -263,15 +254,14 @@ def export_qrcodes(
     zip_buf = io.BytesIO()
     with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as zf:
         for a in rows:
-            if not a.barcode:
-                continue
-            # 文件名用资产编号,人一眼知道是哪台;内容是矢量条码
-            zf.writestr(f"{a.asset_tag}.svg", render_svg(a.barcode))
+            png = io.BytesIO()
+            _make_qr(a.asset_tag).save(png, kind="png", scale=8, border=4)
+            zf.writestr(f"{a.asset_tag}.png", png.getvalue())
     zip_buf.seek(0)
     return StreamingResponse(
         zip_buf,
         media_type="application/zip",
-        headers={"Content-Disposition": 'attachment; filename="barcodes.zip"'},
+        headers={"Content-Disposition": 'attachment; filename="qrcodes.zip"'},
     )
 
 
@@ -329,33 +319,6 @@ def delete_asset(asset_id: int, db: Session = Depends(get_db), admin: User = Dep
     log(db, admin.id, "asset_delete", "asset", asset.id, asset.asset_tag)
     db.commit()
     return {"ok": True}
-
-
-@router.get("/{asset_id}/label")
-def asset_label(
-    asset_id: int,
-    module_width: float = Query(
-        0.375, ge=0.15, le=1.0, description="条宽(mm)。203dpi 下 0.375 = 3 个点"
-    ),
-    module_height: float = Query(8.0, ge=3.0, le=30.0, description="条高(mm)"),
-    db: Session = Depends(get_db),
-    _: User = Depends(active_user),
-):
-    """Code 128-C 条码,矢量 SVG。
-
-    位图会在打印时被重采样,又回到「条宽不是打印点整数倍」的老问题上 ——
-    这正是二维码那版扫不出来的原因,所以这里只出矢量。
-    """
-    asset = _get_asset(db, asset_id)
-    if not asset.barcode:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT, detail="该设备还没有条码号"
-        )
-    return Response(
-        content=render_svg(asset.barcode, module_width, module_height),
-        media_type="image/svg+xml",
-        headers={"X-Label-Width-Mm": str(estimate_width_mm(asset.barcode, module_width))},
-    )
 
 
 @router.get("/{asset_id}/qrcode")

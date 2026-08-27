@@ -115,16 +115,6 @@ class Asset(Base):
     id: Mapped[int] = mapped_column(primary_key=True)
     # PRD 3.2:一经生成永不变更
     asset_tag: Mapped[str] = mapped_column(String(32), unique=True, index=True)
-    # 条码号:6 位纯数字,只给 Code 128-C 用。
-    #
-    # 为什么不直接把 asset_tag 编进条码:C 子集只能编数字,一个符号字符编两位,
-    # 密度是 B 子集的两倍。PC-0001 走 B 子集要 30mm 且随前缀变长,纯数字固定
-    # 22mm —— 省下的宽度换成更粗的条(0.375mm = 203dpi 的 3 个点整数倍),
-    # 这才是标签能不能扫出来的关键。
-    #
-    # 人看到的仍然是 asset_tag:标签上条码底下印的是 PC-0001,手输的也是它。
-    # 这串数字纯粹给机器,员工不会接触到。
-    barcode: Mapped[Optional[str]] = mapped_column(String(6), unique=True, index=True, nullable=True)
     name: Mapped[str] = mapped_column(String(128))
     category_id: Mapped[int] = mapped_column(ForeignKey("categories.id"))
     brand: Mapped[str] = mapped_column(String(64), default="")

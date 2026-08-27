@@ -73,11 +73,6 @@ def create_asset_with_tag(db: Session, category: Category, explicit_tag: Optiona
         db.add(asset)
         try:
             db.flush()
-            # 条码号直接用主键补零:天然唯一,不用再维护一个计数器。
-            # 必须是偶数位,奇数位会逼 Code 128 从 C 子集切出去,白白多占宽度。
-            if asset.barcode is None:
-                asset.barcode = f"{asset.id:06d}"
-                db.flush()
             savepoint.commit()
             return asset
         except IntegrityError:
@@ -423,7 +418,6 @@ def asset_out(
     return AssetOut(
         id=asset.id,
         asset_tag=asset.asset_tag,
-        barcode=asset.barcode,
         name=asset.name,
         category_id=asset.category_id,
         category_name=asset.category.name if asset.category else "",

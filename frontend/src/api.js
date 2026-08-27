@@ -106,8 +106,6 @@ export const api = {
   checkin: (id, body) => request(`/api/assets/${id}/checkin`, { method: 'POST', body }),
   qrcodeUrl: (id, format = 'png', scale = 8) =>
     `/api/assets/${id}/qrcode?format=${format}&scale=${scale}`,
-  labelUrl: (id, moduleWidth = 0.375, moduleHeight = 8) =>
-    `/api/assets/${id}/label?module_width=${moduleWidth}&module_height=${moduleHeight}`,
   exportQrcodes: (assetIds, fmt) =>
     request(`/api/assets/qrcodes/export?fmt=${fmt}`, { method: 'POST', body: assetIds, raw: true }),
   importTemplateUrl: () => '/api/assets/import/template',

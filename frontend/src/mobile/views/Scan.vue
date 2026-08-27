@@ -50,7 +50,7 @@
           </template>
         </van-field>
       </van-cell-group>
-      <div class="muted hint">扫不出来?编号就印在条码下面,直接输进去。</div>
+      <div class="muted hint">扫不出来?编号就印在二维码右边,直接输进去。</div>
 
       <template v-if="continuous && scanned.length">
         <div class="listhead">

@@ -5,9 +5,8 @@
     - 不支持或不认这些码制时回退 @zxing/browser
     - 摄像头需要安全上下文(HTTPS 或 localhost),否则 getUserMedia 直接抛错
 
-    只认我们自己印的两种码:Code 128(现行标签)和 QR(早期标签,过渡期)。
-    刻意不放开全部码制 —— 设备上往往还贴着厂商的一维码,盘库连扫时很容易
-    扫到人家的 SN 当成资产编号,然后一片「未找到该设备」。
+    只认 QR:资产标签是我们自己印的,限定单一码制能少很多误读 —— 设备上往往
+    还贴着厂商的条码,放开码制在盘库连扫时很容易扫错东西。
   -->
   <div class="scanner">
     <video ref="videoEl" class="scanner__video" playsinline muted autoplay></video>
@@ -24,9 +23,6 @@ const props = defineProps({
   continuous: { type: Boolean, default: false },
 })
 const emit = defineEmits(['decode', 'error'])
-
-// 标签上是 Code 128 一维码;QR 留着是为了兼容早期打的标签
-const FORMATS = ['code_128', 'qr_code']
 
 const videoEl = ref(null)
 const hint = ref('正在启动摄像头…')
@@ -67,11 +63,9 @@ async function useBarcodeDetector() {
   } catch {
     return false
   }
-  // 少支持一种就整体回退 ZXing:支持一半的话,漏掉的那种扫不出来,
-  // 用户只会以为功能是坏的
-  if (!FORMATS.every((f) => supported.includes(f))) return false
+  if (!supported.includes('qr_code')) return false
 
-  const detector = new window.BarcodeDetector({ formats: FORMATS })
+  const detector = new window.BarcodeDetector({ formats: ['qr_code'] })
   const tick = async () => {
     if (stopped) return
     try {
@@ -88,15 +82,8 @@ async function useBarcodeDetector() {
 
 
 async function useZxing() {
-  const [{ BrowserMultiFormatReader }, { BarcodeFormat, DecodeHintType }] = await Promise.all([
-    import('@zxing/browser'),
-    import('@zxing/library'),
-  ])
-  const hints = new Map()
-  hints.set(DecodeHintType.POSSIBLE_FORMATS, [BarcodeFormat.CODE_128, BarcodeFormat.QR_CODE])
-  // 小尺寸一维码不开 TRY_HARDER 基本扫不出来
-  hints.set(DecodeHintType.TRY_HARDER, true)
-  const reader = new BrowserMultiFormatReader(hints)
+  const { BrowserQRCodeReader } = await import('@zxing/browser')
+  const reader = new BrowserQRCodeReader()
   zxingControls = await reader.decodeFromVideoElement(videoEl.value, (result) => {
     if (result) handleDecode(result.getText())
   })
@@ -143,7 +130,7 @@ async function start() {
     return
   }
 
-  hint.value = '把标签上的条码对准取景框'
+  hint.value = '将二维码对准取景框'
   const native = await useBarcodeDetector()
   if (!native) {
     try {
@@ -229,9 +216,8 @@ defineExpose({ start, stop })
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  /* 宽框:主力是一维条码,方框会让人以为要把长条塞进正方形里 */
-  width: 84%;
-  aspect-ratio: 5 / 2;
+  width: 62%;
+  aspect-ratio: 1;
   border: 3px solid rgba(255, 255, 255, 0.9);
   border-radius: 10px;
   box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.35);
