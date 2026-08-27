@@ -3,7 +3,12 @@
 #   docker compose -f docker-compose.yml -f docker-compose.caddy.yml up -d
 services:
   app:
-    build: .
+    build:
+      context: .
+      args:
+        # 国内服务器把这两个填上,否则 pip 拉包会超时(见 .env.example)
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-}
+        NPM_REGISTRY: ${NPM_REGISTRY:-}
     restart: unless-stopped
     environment:
       # 生产必须换掉:泄露即等于任何人都能伪造登录态
