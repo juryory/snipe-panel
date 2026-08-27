@@ -55,7 +55,7 @@
         <el-button :disabled="!selection.length" @click="exportSelected('csv')">
           导出编号 CSV({{ selection.length }})
         </el-button>
-        <el-button :disabled="!selection.length" @click="exportSelected('zip')">导出二维码</el-button>
+        <el-button :disabled="!selection.length" @click="exportSelected('zip')">导出条码</el-button>
         <el-button @click="exportExcel">导出台账</el-button>
         <el-button v-if="admin" @click="importVisible = true">批量导入</el-button>
         <el-button v-if="admin" type="primary" @click="openForm()">新增设备</el-button>
@@ -164,7 +164,7 @@
         </el-table-column>
         <el-table-column label="操作" width="330" fixed="right">
           <template #default="{ row }">
-            <el-button link type="primary" @click="showQr(row)">二维码</el-button>
+            <el-button link type="primary" @click="showQr(row)">标签</el-button>
             <el-button link type="warning" @click="openCheck(row)">盘库</el-button>
             <el-button v-if="!row.is_checked_out" link type="primary" @click="openCheckout(row)">借出</el-button>
             <el-button v-else link type="success" @click="doCheckin(row)">归还</el-button>
@@ -254,16 +254,29 @@
       </template>
     </el-dialog>
 
-    <!-- 二维码 -->
-    <el-dialog v-model="qrVisible" title="设备二维码" width="360px">
+    <!-- 标签 -->
+    <el-dialog v-model="qrVisible" title="设备标签" width="420px">
       <div v-if="qrAsset" class="qr">
-        <img :src="qrSrc" alt="二维码" class="qr__img" />
+        <!-- 按 1:1 物理尺寸显示,所见即所印 -->
+        <img :src="labelSrc" alt="条码" class="qr__img" />
         <div class="tag qr__tag">{{ qrAsset.asset_tag }}</div>
+        <div class="muted qr__code">条码号 {{ qrAsset.barcode }}</div>
+
+        <el-form label-width="80px" style="margin-top: 12px; text-align: left">
+          <el-form-item label="条宽">
+            <el-select v-model="labelWidth" style="width: 100%">
+              <el-option label="0.375mm(203dpi 的 3 个点,推荐)" :value="0.375" />
+              <el-option label="0.25mm(203dpi 的 2 个点,标签更短)" :value="0.25" />
+              <el-option label="0.5mm(203dpi 的 4 个点,最保险)" :value="0.5" />
+            </el-select>
+          </el-form-item>
+        </el-form>
+
         <p class="muted qr__note">
-          二维码里只有这串编号,不含链接。用系统外的扫码器扫只会得到一串字符,查不到任何信息。
+          条码里只有那 6 位数字,不含链接也不含设备信息。标签上要同时印下面这行
+          <b>{{ qrAsset.asset_tag }}</b> —— 条码磨花了还能手输。
         </p>
-        <el-button @click="downloadQr('png')">下载 PNG</el-button>
-        <el-button @click="downloadQr('svg')">下载 SVG</el-button>
+        <el-button @click="downloadLabel">下载 SVG</el-button>
       </div>
     </el-dialog>
 
@@ -422,7 +435,10 @@ const editing = ref(false)
 
 const qrVisible = ref(false)
 const qrAsset = ref(null)
-const qrSrc = computed(() => (qrAsset.value ? api.qrcodeUrl(qrAsset.value.id, 'png', 10) : ''))
+const labelWidth = ref(0.375)
+const labelSrc = computed(() =>
+  qrAsset.value ? api.labelUrl(qrAsset.value.id, labelWidth.value) : '',
+)
 
 const importVisible = ref(false)
 
@@ -578,11 +594,12 @@ function showQr(row) {
   qrVisible.value = true
 }
 
-function downloadQr(format) {
-  // 走同域链接直接下载,Cookie 会自动带上
+function downloadLabel() {
+  // 走同域链接直接下载,Cookie 会自动带上。只出矢量:位图打印时会被重采样,
+  // 条宽又变回不是打印点的整数倍,正是二维码那版扫不出来的原因
   const link = document.createElement('a')
-  link.href = api.qrcodeUrl(qrAsset.value.id, format, format === 'png' ? 16 : 8)
-  link.download = `${qrAsset.value.asset_tag}.${format}`
+  link.href = api.labelUrl(qrAsset.value.id, labelWidth.value)
+  link.download = `${qrAsset.value.asset_tag}.svg`
   link.click()
 }
 
@@ -714,7 +731,8 @@ onMounted(async () => {
 .tag { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 .hint { font-size: 12px; line-height: 1.5; }
 .qr { text-align: center; }
-.qr__img { width: 200px; height: 200px; image-rendering: pixelated; }
+.qr__img { width: 100%; max-width: 340px; }
+.qr__code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
 .qr__tag { font-size: 18px; font-weight: 600; margin: 8px 0; }
 .qr__note { font-size: 12px; text-align: left; line-height: 1.6; }
 .kitlist { max-height: 160px; overflow: auto; line-height: 1.8; }

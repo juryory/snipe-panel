@@ -1,7 +1,10 @@
 # 公司设备资产管理系统 · 产品需求文档(PRD)
 
-版本 v0.8 · 2026-08-27
+版本 v0.9 · 2026-08-27
 
+> v0.9 变更:标签码由二维码改为 Code 128-C 一维码(打印精度所迫),
+> 设备增加 6 位纯数字条码号。
+>
 > v0.8 变更:接入数据库迁移;新增报修记录、成套借用、Excel 批量导入、
 > 操作日志页面、事件推送;移除序列号扫码(使用场景少)。
 >
@@ -85,6 +88,13 @@ MVP 只做「管理员 + 普通用户」两级,后续再细分。
 - **资产编号一经生成永不变更**。标签已贴在实物上,改分类不改编号;分类前缀仅在生成时使用一次
 - 支持导入存量设备时手工指定编号
 - 流水号自增依赖数据库唯一约束 + 冲突重试,不在应用层做「读-加-写」
+
+> **v0.9 起改用 Code 128-C 一维码**。原因是打印精度:12mm 标签上 QR 每模块
+> 只有 0.31mm = 203dpi 打印机的 2.5 个点,不是整数倍,模块边缘参差,实际打样
+> 扫不出来。一维码只在一个方向要精度,条宽可取 0.375mm(正好 3 个点)。
+> 设备因此增加 `barcode` 字段(6 位纯数字,C 子集只能编数字),标签上仍印
+> `asset_tag` 供人工识别,两者都能查到设备。以下关于「码里不放 URL」的约定
+> 对条码同样适用。
 
 **二维码内容 = 纯资产编号字符串**(如 `PC-0001`),**不放 URL**。
 
@@ -257,6 +267,7 @@ MVP 只做「管理员 + 普通用户」两级,后续再细分。
 |---|---|---|
 | id | PK | |
 | asset_tag | string, unique | 资产编号,如 PC-0001,生成后不可变更 |
+| barcode | string(6), unique | 条码号,6 位纯数字,仅用于 Code 128-C 标签 |
 | name | string | 设备名称 |
 | category_id | FK | 分类 |
 | brand / model | string | 品牌 / 型号 |
@@ -302,7 +313,8 @@ borrower_id(可空), note, applied, resolved_at, resolved_by_id`
 | PUT | `/api/assets/{id}` | 编辑 |
 | DELETE | `/api/assets/{id}` | 软删除 |
 | GET | `/api/assets/by-tag/{tag}` | ★ 扫码查询(鉴权 + 限流) |
-| GET | `/api/assets/{id}/qrcode` | 取二维码图片(`?format=png\|svg`) |
+| GET | `/api/assets/{id}/label` | ★ 取 Code 128-C 条码(矢量 SVG,可调条宽) |
+| GET | `/api/assets/{id}/qrcode` | 取二维码图片(旧标签兼容) |
 | POST | `/api/assets/qrcodes/export` | 批量导出二维码 / 编号列表 |
 | POST | `/api/assets/{id}/checkout` | 借出(body: user_id, due_at) |
 | POST | `/api/assets/{id}/checkin` | 归还 |

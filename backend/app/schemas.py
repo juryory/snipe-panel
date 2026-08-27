@@ -283,6 +283,7 @@ class AssetOut(BaseModel):
 
     id: int
     asset_tag: str
+    barcode: Optional[str]  # 6 位纯数字,只用于 Code 128-C 标签
     name: str
     category_id: int
     category_name: str

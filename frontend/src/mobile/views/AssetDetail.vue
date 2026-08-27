@@ -100,7 +100,7 @@
         </van-button>
 
         <div class="row2">
-          <van-button round block plain icon="qr" @click="qrVisible = true">二维码</van-button>
+          <van-button round block plain icon="qr" @click="qrVisible = true">标签</van-button>
           <van-button v-if="admin" round block plain icon="more-o" @click="moreVisible = true">
             更多
           </van-button>
@@ -180,13 +180,15 @@
       />
     </van-popup>
 
-    <!-- 二维码:补打标签、或现场核对码能不能扫出来 -->
+    <!-- 标签:补打、或现场核对条码扫不扫得出来 -->
     <van-popup v-model:show="qrVisible" round teleport="body">
       <div v-if="asset" class="qr">
-        <img :src="qrSrc" alt="二维码" class="qr__img" />
+        <img :src="labelSrc" alt="条码" class="qr__img" />
         <div class="qr__tag tag-mono">{{ asset.asset_tag }}</div>
+        <div class="muted qr__code">条码号 {{ asset.barcode }}</div>
         <p class="muted qr__note">
-          码里只有这串编号,没有链接。系统外的扫码器扫到也查不到任何信息。
+          条码里只有那 6 位数字,没有链接也没有设备信息。标签上要同时印
+          <b>{{ asset.asset_tag }}</b> —— 条码磨花了还能手输。
         </p>
       </div>
     </van-popup>
@@ -265,7 +267,7 @@ const dueAt = ref(null)
 
 const badge = computed(() => displayStatus(asset.value))
 const dueLabel = computed(() => (dueAt.value ? dueAt.value.toLocaleDateString('zh-CN') : ''))
-const qrSrc = computed(() => (asset.value ? api.qrcodeUrl(asset.value.id, 'png', 10) : ''))
+const labelSrc = computed(() => (asset.value ? api.labelUrl(asset.value.id) : ''))
 
 async function onMore(action) {
   if (action.key === 'edit') {
@@ -365,8 +367,9 @@ watch(() => route.params.tag, load, { immediate: true })
 .actions { padding: 16px; display: flex; flex-direction: column; gap: 12px; }
 .tip { font-size: 12px; text-align: center; margin: 0; }
 .row2 { display: flex; gap: 12px; }
-.qr { padding: 24px; text-align: center; width: 260px; }
-.qr__img { width: 200px; height: 200px; image-rendering: pixelated; }
+.qr { padding: 24px; text-align: center; width: 300px; }
+.qr__img { width: 100%; }
+.qr__code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
 .qr__tag { font-size: 18px; font-weight: 600; margin: 10px 0; }
 .qr__note { font-size: 12px; line-height: 1.6; text-align: left; margin: 0; }
 .overdue { color: #ee0a24; font-weight: 600; }
