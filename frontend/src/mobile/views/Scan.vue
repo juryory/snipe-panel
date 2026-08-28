@@ -14,6 +14,7 @@
         v-if="!cameraError"
         :key="continuous ? 'continuous' : 'single'"
         :continuous="continuous"
+        :formats="FORMATS"
         @decode="onDecode"
         @error="(m) => (cameraError = m)"
       />
@@ -50,7 +51,9 @@
           </template>
         </van-field>
       </van-cell-group>
-      <div class="muted hint">扫不出来?编号就印在二维码右边,直接输进去。</div>
+      <div class="muted hint">
+        二维码和条形码都能扫。扫不出来的话,编号就印在码旁边,直接输进去。
+      </div>
 
       <template v-if="continuous && scanned.length">
         <div class="listhead">
@@ -121,6 +124,14 @@ import { api, ApiError } from '../../api'
 
 defineOptions({ name: 'MobileScan' })
 
+// 标签可能是 QR 也可能是 Code 128,取决于标签机里选的码制,两种都要认
+const FORMATS = ['qr_code', 'code_128']
+
+// 资产编号形如 PC-0001:前缀 + 连字符 + 流水号。
+// 设备上往往还贴着厂商的条码,放开码制之后它们也会被读到 —— 连扫时必须挡掉,
+// 否则会把厂商条码当成设备编号去查,既查不到又白白吃掉 by-tag 的限流额度。
+const TAG_SHAPE = /^[A-Za-z0-9]{1,8}-\d{1,8}$/
+
 const router = useRouter()
 
 const cameraError = ref('')
@@ -168,6 +179,9 @@ async function borrowAll() {
 
 async function onDecode(text) {
   if (continuous.value) {
+    // 连扫时静默跳过不像资产编号的码。单台扫码不过滤:那时人是主动对准某个码的,
+    // 直接跳过去让服务端回一句「未找到该设备」,比扫码器毫无反应要好懂得多
+    if (!TAG_SHAPE.test(text)) return
     await collect(text)
     return
   }

@@ -5,27 +5,35 @@
     - 不支持或不认这些码制时回退 @zxing/browser
     - 摄像头需要安全上下文(HTTPS 或 localhost),否则 getUserMedia 直接抛错
 
-    只认 QR:资产标签是我们自己印的,限定单一码制能少很多误读 —— 设备上往往
-    还贴着厂商的条码,放开码制在盘库连扫时很容易扫错东西。
+    formats 决定认哪些码。标签由标签机生成,可能是 QR 也可能是 Code 128,
+    两种都要能扫。放开码制的代价是设备上厂商贴的条码也会被读到 —— 由调用方
+    按资产编号的格式过滤(见 Scan.vue),扫码器本身只管解码,不管取舍。
   -->
   <div class="scanner">
     <video ref="videoEl" class="scanner__video" playsinline muted autoplay></video>
-    <div class="scanner__frame"></div>
+    <div class="scanner__frame" :class="{ 'scanner__frame--wide': wideFrame }"></div>
     <p v-if="hint" class="scanner__hint">{{ hint }}</p>
   </div>
 </template>
 
 <script setup>
-import { onActivated, onBeforeUnmount, onDeactivated, onMounted, ref } from 'vue'
+import { computed, onActivated, onBeforeUnmount, onDeactivated, onMounted, ref } from 'vue'
 
 const props = defineProps({
   // 连续扫描:扫完不停,继续扫下一台(PRD 3.4,盘点用)
   continuous: { type: Boolean, default: false },
+  // BarcodeDetector 的码制名,ZXing 那边会映射过去
+  formats: { type: Array, default: () => ['qr_code'] },
 })
 const emit = defineEmits(['decode', 'error'])
 
 const videoEl = ref(null)
 const hint = ref('正在启动摄像头…')
+
+// 带一维码时用宽取景框,否则会让人以为要把长条塞进正方形里
+const wideFrame = computed(() =>
+  props.formats.some((f) => !['qr_code', 'data_matrix', 'aztec'].includes(f)),
+)
 
 let stream = null
 let zxingControls = null
@@ -63,9 +71,11 @@ async function useBarcodeDetector() {
   } catch {
     return false
   }
-  if (!supported.includes('qr_code')) return false
+  // 只支持一部分码制时整体回退 ZXing —— 漏掉的那种扫不出来,
+  // 用户只会以为是功能坏了,而不会想到是码制没覆盖
+  if (!props.formats.every((f) => supported.includes(f))) return false
 
-  const detector = new window.BarcodeDetector({ formats: ['qr_code'] })
+  const detector = new window.BarcodeDetector({ formats: [...props.formats] })
   const tick = async () => {
     if (stopped) return
     try {
@@ -82,8 +92,35 @@ async function useBarcodeDetector() {
 
 
 async function useZxing() {
-  const { BrowserQRCodeReader } = await import('@zxing/browser')
-  const reader = new BrowserQRCodeReader()
+  const [{ BrowserMultiFormatReader, BrowserQRCodeReader }, { BarcodeFormat, DecodeHintType }] =
+    await Promise.all([import('@zxing/browser'), import('@zxing/library')])
+
+  let reader
+  if (props.formats.length === 1 && props.formats[0] === 'qr_code') {
+    reader = new BrowserQRCodeReader()
+  } else {
+    const nameToFormat = {
+      qr_code: BarcodeFormat.QR_CODE,
+      data_matrix: BarcodeFormat.DATA_MATRIX,
+      code_128: BarcodeFormat.CODE_128,
+      code_39: BarcodeFormat.CODE_39,
+      code_93: BarcodeFormat.CODE_93,
+      itf: BarcodeFormat.ITF,
+      ean_13: BarcodeFormat.EAN_13,
+      ean_8: BarcodeFormat.EAN_8,
+      upc_a: BarcodeFormat.UPC_A,
+      upc_e: BarcodeFormat.UPC_E,
+    }
+    const hints = new Map()
+    hints.set(
+      DecodeHintType.POSSIBLE_FORMATS,
+      props.formats.map((f) => nameToFormat[f]).filter((f) => f !== undefined),
+    )
+    // 小尺寸一维码不开 TRY_HARDER 基本扫不出来
+    hints.set(DecodeHintType.TRY_HARDER, true)
+    reader = new BrowserMultiFormatReader(hints)
+  }
+
   zxingControls = await reader.decodeFromVideoElement(videoEl.value, (result) => {
     if (result) handleDecode(result.getText())
   })
@@ -130,7 +167,7 @@ async function start() {
     return
   }
 
-  hint.value = '将二维码对准取景框'
+  hint.value = wideFrame.value ? '把标签上的码对准取景框' : '将二维码对准取景框'
   const native = await useBarcodeDetector()
   if (!native) {
     try {
@@ -221,6 +258,10 @@ defineExpose({ start, stop })
   border: 3px solid rgba(255, 255, 255, 0.9);
   border-radius: 10px;
   box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.35);
+}
+.scanner__frame--wide {
+  width: 84%;
+  aspect-ratio: 5 / 2;
 }
 .scanner__hint {
   position: absolute;
